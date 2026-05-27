@@ -98,13 +98,13 @@ Dieses Kapitel listet Wettkampf-spezifische Risiken (R01–R08) sowie bewusste t
 
 Die folgenden Schulden sind **bewusste Entscheidungen** für den Wettkampf-Scope. Jede Schuld nennt den Grund und die Konsequenz für einen späteren Produktiv-Einsatz.
 
-### TD01 — Keine EF Migrations, nur Raw SQL
+### TD01 — Doppelte Schema-Wahrheit: EF-Migrations + generiertes sudoku.sql
 
 | Attribut | Wert |
 |----------|------|
-| Beschreibung | DB-Schema wird über das einzelne Script **Datenbank-Skript** gepflegt — kein `dotnet ef migrations add …`. |
-| Begründung | README §1.3 verlangt explizit: "Create for each table a SQL statement and save them in a script called sudoku.sql." Eine EF-Migration würde paralleles, alternatives Wahrheit-Schema erzeugen. |
-| Folge bei Produktiv-Use | Schema-Evolution erfordert manuelle SQL-Patches; kein Rollback-Mechanismus; keine automatisierte Schema-Drift-Erkennung. |
+| Beschreibung | EF-Migrations sind Source of Truth (`KillerSudoku.Data/Persistence/Migrations/`). Das von README §1.3 geforderte **Datenbank-Skript** wird per `dotnet ef migrations script --idempotent -o db/sudoku.sql` aus den Migrations exportiert. |
+| Begründung | README §1.3 verlangt explizit ein **Datenbank-Skript**-Skript für den Prüfer; gleichzeitig braucht ein .NET-/EF-Workflow Migrations für reproduzierbare Schema-Evolution. Beides parallel zu pflegen ist günstiger als nur eine Variante. |
+| Folge bei Produktiv-Use | Bei manuellen Änderungen am SQL-Skript ohne entsprechende Migration entsteht Drift — Disziplin nötig: Schema-Änderungen immer über Migrations, dann **Datenbank-Skript** neu exportieren. Im CI kann ein Drift-Check ergänzt werden (`dotnet ef migrations script` ↔ commited **Datenbank-Skript** vergleichen). |
 
 ### TD02 — Keine i18n-Vorbereitung (UI nur Deutsch)
 

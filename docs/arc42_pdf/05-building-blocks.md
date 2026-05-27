@@ -17,13 +17,13 @@ flowchart TB
  direction TB
  Pages["Pages<br/>Home · Login · Register<br/>PuzzleList · EnterPuzzle<br/>PlayPuzzle · Highscore"]
  Layout["Shared Layout<br/>MainLayout · NavMenu"]
- UIComp["Components<br/>PuzzleGrid · CageEditor<br/>HintButton · PauseButton<br/>CheckSolutionButton<br/>PencilMarkLayer<br/>Toolbar · FilterBar<br/>HighscoreTable<br/>RulesPanel · MiniSudokuExample<br/>RegisterForm · LoginForm"]
+ UIComp["Components<br/>App.razor · Routes.razor<br/>RedirectToLogin.razor<br/>Layout/MainLayout.razor<br/>Layout/ReconnectModal.razor<br/>Shared/MiniSudokuExample.razor"]
  end
 
  subgraph Core["KillerSudoku.Core (.NET Class Library)"]
  direction TB
- Services["Application Services<br/>IAuthService · AuthService<br/>IPuzzleService · PuzzleService<br/>IGameService · GameService<br/>IHintService · HintService<br/>IHighscoreService · HighscoreService"]
- Domain["Domain Kern (isoliert)<br/>ISolverService · SolverService<br/>SolutionValidator<br/>HintStrategies (Naked Single, Cage-Forced)"]
+ Services["Application Services<br/>IPuzzleService · PuzzleService<br/>IGameService · GameService<br/>IHintService · HintService<br/>IHighscoreService · HighscoreService<br/>IScoreCalculator · ScoreCalculator<br/>(Auth via ASP.NET Identity SignInManager/UserManager)"]
+ Domain["Domain Kern (isoliert)<br/>ISolverService · SolverService<br/>SolutionValidator<br/>PuzzleStructureValidator<br/>PuzzleGenerator (IPuzzleGenerator)"]
  Dtos["DTOs / Records<br/>RegisterDto · LoginDto<br/>PuzzleInputDto · CageInputDto<br/>CageDef · SolveResult<br/>CheckResult · HintResult<br/>PuzzleListItem · HighscoreEntry<br/>RegisterResult · LoginResult<br/>SavePuzzleResult · PageResult&lt;T&gt;"]
  end
 
@@ -31,7 +31,7 @@ flowchart TB
  direction TB
  Ctx["SudokuDbContext"]
  Entities["Entities<br/>AppUser · Puzzle<br/>Cage · CageCell<br/>Game · GameCell<br/>PencilMark · HintLog"]
- Migr["EF Migrations<br/>(Schema = sudoku.sql)"]
+ Migr["EF Migrations<br/>(Source of Truth)<br/>sudoku.sql generiert via<br/>dotnet ef migrations script"]
  end
 
  DB[("MS-SQL Express<br/>Database: sudoku<br/>+ vw_Highscore (View)")]
@@ -66,22 +66,26 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 |--------|---------|
 | **Zweck** | Blazor-Server-Anwendung; rendert UI, leitet User-Aktionen an Application-Services weiter, zeigt Ergebnisse. |
 | **Eingehende Schnittstelle** | HTTP-Requests vom Browser (Routes aus **Funktionalitäts-Matrix** §Screen-Inventar S1–S8); SignalR-Verbindung für interaktive Updates. |
-| **Ausgehende Schnittstelle** | Application-Services via DI: `IAuthService`, `IPuzzleService`, `IGameService`, `IHintService`, `IHighscoreService`. |
-| **Pages (`@page`)** | `Home.razor` (S1, `/`) · `Register.razor` (S2, `/register`) · `Login.razor` (S3, `/login`) · `PuzzleList.razor` (S4, `/puzzles`) · `EnterPuzzle.razor` (S5, `/puzzles/new`) · `PlayPuzzle.razor` (S6, `/puzzles/{id}/play`) · `Highscore.razor` (S7, `/highscore`). |
-| **Shared Components** | `MainLayout.razor` · `NavMenu.razor` · `RulesPanel.razor` · `MiniSudokuExample.razor` · `RegisterForm.razor` · `LoginForm.razor` · `PuzzleGrid.razor` · `CageEditor.razor` · `HintButton.razor` · `CheckSolutionButton.razor` · `PauseButton.razor` · `PencilMarkLayer.razor` · `Toolbar.razor` · `FilterBar.razor` · `PuzzleCard.razor` · `HighscoreTable.razor`. |
+| **Ausgehende Schnittstelle** | Application-Services via DI: `IPuzzleService`, `IGameService`, `IHintService`, `IHighscoreService`. Auth direkt über ASP.NET-Identity-`SignInManager<AppUser>` und `UserManager<AppUser>` (kein eigener Wrapper-Service). |
+| **Pages (`@page`)** | `Home.razor` (S1, `/`) · `Auth/Register.razor` (S2, `/register`) · `Auth/Login.razor` (S3, `/login`) · `Puzzles.razor` (S4, `/puzzles`) · `EnterPuzzle.razor` (S5, `/puzzles/new`) · `PlayPuzzle.razor` (S6, `/puzzles/{id}/play`) · `Highscore.razor` (S7, `/highscore`). |
+| **Shared Components** | `App.razor` · `Routes.razor` · `RedirectToLogin.razor` · `MainLayout.razor` · `ReconnectModal.razor` · `MiniSudokuExample.razor` · `Error.razor` · `NotFound.razor`. |
 | **Querschnitt** | `[Authorize]` auf allen Pages außer S1/S2/S3 (**V16**); `EditForm` mit Antiforgery (**V15**); Razor-`@`-Encoding (**V14**). |
 | **Test-Strategie** | bUnit-Component-Tests (Rendering, Event-Handler), E2E ohne Framework gemäß README §3.2. |
+
+**Inline-UI:** Die im class-diagram.md skizzierten Sub-Komponenten (`PuzzleGrid`, `Toolbar`, `CageEditor`, `HintButton`, `PauseButton`, `CheckSolutionButton`, `PencilMarkLayer`, `FilterBar`, `PuzzleCard`, `HighscoreTable`, `RegisterForm`, `LoginForm`, `RulesPanel`, `NavMenu`) sind aktuell **nicht als eigene .razor-Dateien implementiert** — ihre Markup-/Event-Handler-Logik lebt inline in den Pages (`PlayPuzzle.razor`, `EnterPuzzle.razor`, `Puzzles.razor`, `Highscore.razor`, `Home.razor`, `Auth/Login.razor`, `Auth/Register.razor`). Dies hält den Component-Tree flach. Eine spätere Extraktion ist möglich, ohne API-Brüche.
 
 ### 5.2.2 KillerSudoku.Core — Application Services
 
 | Aspekt | Details |
 |--------|---------|
 | **Zweck** | Use-Case-Orchestrierung; konvertiert UI-Eingaben in DB-Operationen + Domain-Aufrufe; setzt Transaktions- und Autorisierungs-Grenzen. |
-| **Eingehende Schnittstelle** | Service-Interfaces `IAuthService`, `IPuzzleService`, `IGameService`, `IHintService`, `IHighscoreService` — komplette Signaturen siehe Funktionalitäts-Matrix. |
+| **Eingehende Schnittstelle** | Service-Interfaces `IPuzzleService`, `IGameService`, `IHintService`, `IHighscoreService` — komplette Signaturen siehe Funktionalitäts-Matrix. Auth-Flows (UC02/UC03) verwenden direkt ASP.NET-Identity (`SignInManager<AppUser>`, `UserManager<AppUser>`) ohne eigene Wrapper-Service-Schicht. |
 | **Ausgehende Schnittstelle** | `ISolverService` (Domain) + `SudokuDbContext` (Data). |
-| **Enthaltene Services** | `AuthService` (UC02/UC03) · `PuzzleService` (UC04/UC05/UC12) · `GameService` (UC06/UC09/UC10/UC13/UC14) · `HintService` (UC07) · `HighscoreService` (UC08). |
+| **Enthaltene Services** | `PuzzleService` (UC04/UC05/UC12) · `GameService` (UC06/UC09/UC10/UC13/UC14) · `HintService` (UC07) · `HighscoreService` (UC08) · **`ScoreCalculator`** (Singleton, pure Funktion — wird von `GameService.CompleteGameAsync` aufgerufen). UC02/UC03 (Register/Login) werden direkt über ASP.NET-Identity-Services (`SignInManager`, `UserManager`) in den Razor-Pages umgesetzt. |
 | **UC-Mapping** | Vollständig in **Funktionalitäts-Matrix** §Matrix-Tabelle. |
 | **Test-Strategie** | Unit-Tests pro Service mit gemocktem `ISolverService` + `SudokuDbContext` (EF InMemory); Integration-Tests gegen echte MS-SQL-Test-DB. |
+
+**HighscoreService — View-Status:** Der Service liest aktuell mit LINQ-Joins über `Games ⋈ AppUser ⋈ Puzzle`. Die View `vw_Highscore` existiert zwar im SQL-Schema (`db/sudoku.sql`), wird aber vom `SudokuDbContext` **nicht** als Keyless-Entity gemappt. Switch ist offen — Schema-Reserve.
 
 ### 5.2.3 KillerSudoku.Core — Domain-Kern (Solver/Validator)
 
@@ -90,7 +94,7 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 | **Zweck** | Reine Algorithmik für die vier Killer-Sudoku-Regeln aus README §1: (1) "Each row, column, and nonet contains each number exactly once", (2) "The sum of all numbers in a cage must match the small number printed in its corner", (3) "No number appears more than once in a cage", (4) "The solution must be unique". |
 | **Eingehende Schnittstelle** | `ISolverService` — Methoden `Solve(givenValues, cages)` und `CountSolutions(givenValues, cages)` (**Funktionalitäts-Matrix** §Service-Interfaces). |
 | **Ausgehende Schnittstelle** | **Keine** — pure C# ohne Framework- oder DB-Abhängigkeit. |
-| **Enthaltene Klassen** | `SolverService` (Backtracker + Constraint-Propagation) · `SolutionValidator` (Row/Col/Nonet/Cage-Check für UC09 §6.3) · `HintStrategies` (Naked Single, Cage-Forced; siehe UC07 in **Use-Cases-Dokument**) · interne Records `CageDef`, `Board`. |
+| **Enthaltene Klassen** | `SolverService` (Backtracking + MRV + Bit-Masken + Cage-Pruning, sealed) · `SolutionValidator` (Vollständigkeit → Σ=405 → Row/Col/Nonet → Cage-Sum/Duplikat für UC09) · `PuzzleStructureValidator` (Pre-Save-Check: Difficulty, Cage-Sum-Range, Coverage 81 Zellen für UC04) · `PuzzleGenerator` (Random-Generator für UC04 Editor) · `ScoreCalculator` (Score-Formel UC08/UC10). **Die Hint-Strategien (Naked Single → Cage-Forced → Solver-Fallback) sind in `HintService` (Data-Layer) inline implementiert**, nicht als eigenständige Domain-Klasse. |
 | **Performance-Anforderung** | AC11.2: terminiert auch bei schweren Puzzles in < 2 s; bricht bei Zähl-Modus nach der 2. gefundenen Lösung ab. |
 | **Test-Strategie** | Reine Unit-Tests mit den 2 README-Beispielen (§1.2) + Edge-Cases: unsolvable, multi-solution, vollständig vor-gelöst, minimal-clue. Höchste Test-Coverage-Priorität (siehe **Funktionalitäts-Matrix** §Kritische Abhängigkeiten). |
 
@@ -102,7 +106,7 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 | **Eingehende Schnittstelle** | `SudokuDbContext` (DbSet&lt;T&gt; für jede Entity). |
 | **Ausgehende Schnittstelle** | T-SQL gegen MS-SQL Express via ADO.NET-Provider. |
 | **Enthaltene Entities** | `AppUser` · `Puzzle` · `Cage` · `CageCell` · `Game` · `GameCell` · `PencilMark` · `HintLog`. Schema-Quelle: **Datenbank-Skript**, ERD: **ER-Modell**. |
-| **View-Read-Model** | `vw_Highscore` (siehe **Datenbank-Skript** Zeilen 215–231) — wird per `Set<HighscoreEntry>.FromSqlRaw(...)` oder Keyless-Entity gelesen. |
+| **View-Read-Model** | `vw_Highscore` existiert im SQL-Schema (`db/sudoku.sql` Z. 215–231), wird vom aktuellen `SudokuDbContext` aber **nicht** als Keyless-Entity gemappt. `HighscoreService` liest stattdessen via LINQ-Join über `_db.Games` (siehe §5.2.2). |
 | **DB-Constraints (Defense-Layer)** | Siehe §5.4 unten. |
 | **Test-Strategie** | Integration-Tests mit Testcontainers (MS-SQL-Image) oder lokaler Test-DB; Constraint-Tests (INSERT mit Difficulty=4 muss fehlschlagen) gemäß **ER-Modell** §Ableitungen für Tests. |
 
@@ -110,83 +114,20 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 
 ## 5.3 ER-Modell (Verweis + Einbettung)
 
-Das ER-Modell ist autoritativ in **ER-Modell** dokumentiert, inklusive Design-Entscheidungen, Constraints und Sample-Queries. Für die PDF-Lesbarkeit ist das Mermaid-ERD hier eingebettet:
+Das vollständige ER-Modell mit Identity-Spalten und Nullable-Markierungen ist autoritativ in **ER-Modell**. Für die PDF-Lesbarkeit wird hier nur eine konzeptionelle Übersicht referenziert — die fachlichen Beziehungen lauten:
 
-```mermaid
-erDiagram
- AppUser ||--o{ Puzzle : creates
- AppUser ||--o{ Game : plays
- Puzzle ||--o{ Cage : contains
- Puzzle ||--o{ Game : "is played in"
- Cage ||--|{ CageCell : has
- Game ||--|{ GameCell : has
- Game ||--o{ PencilMark: has
- Game ||--o{ HintLog : logs
-
- AppUser {
- int Id PK
- nvarchar Username UK
- nvarchar Email UK
- nvarchar PasswordHash
- datetime2 CreatedAt
- }
- Puzzle {
- int Id PK
- tinyint Difficulty
- int CreatedById FK
- datetime2 CreatedAt
- }
- Cage {
- int Id PK
- int PuzzleId FK
- tinyint Sum
- }
- CageCell {
- int CageId PK,FK
- tinyint RowIdx PK
- tinyint ColIdx PK
- }
- Game {
- int Id PK
- int UserId FK
- int PuzzleId FK
- datetime2 StartTime
- datetime2 EndTime
- int TimeSeconds
- int HintsUsed
- int Score
- bit IsCompleted
- bit IsPaused
- datetime2 PausedAt
- int TotalPausedSeconds
- }
- GameCell {
- int GameId PK,FK
- tinyint RowIdx PK
- tinyint ColIdx PK
- tinyint CellValue
- }
- PencilMark {
- int GameId PK,FK
- tinyint RowIdx PK
- tinyint ColIdx PK
- tinyint MarkValue PK
- }
- HintLog {
- int Id PK
- int GameId FK
- tinyint RowIdx
- tinyint ColIdx
- datetime2 HintAt
- }
-```
+- `AppUser` (Identity-Basisklasse) 1:N `Puzzle` (CreatedBy)
+- `AppUser` 1:N `Game`
+- `Puzzle` 1:N `Cage` (1..*)
+- `Cage` 1:N `CageCell` (jede Zelle 0–8 × 0–8 pro Puzzle eindeutig — durch Trigger erzwungen)
+- `Game` 1:N `GameCell`, `PencilMark`, `HintLog`
 
 **Schlüssel-Begründungen (Auszug aus **ER-Modell**):**
 
 - `AppUser` statt `User` — `USER` ist reserviertes T-SQL-Keyword.
 - `RowIdx`/`ColIdx` statt `Row`/`Col` — beides reserviert.
 - **Keine Solution-Spalte** in `Puzzle` — UC04 wörtlich: *"No solution is recorded. Solutions must be calculated with an algorithm"*.
-- `Highscore` als **VIEW** statt denormalisierte Tabelle — single source of truth, kein Sync-Problem.
+- `vw_Highscore`-VIEW existiert im SQL-Schema als Reserve; `HighscoreService` liest aktuell via LINQ-Join (single source of truth: `Game`-Tabelle).
 - Pause-Mechanik via `IsPaused` + `PausedAt` + `TotalPausedSeconds` → erlaubt sauberen Resume mit `TimeSeconds = DATEDIFF(SECOND, StartTime, EndTime) − TotalPausedSeconds`.
 
 ---
@@ -198,8 +139,10 @@ Vollständiges Schema in **Datenbank-Skript**. Folgende Objekte werden angelegt:
 **Tabellen (in Reverse-FK-Reihenfolge erzeugt):**
 
 - `AppUser` — Benutzer mit gehashtem Passwort
- - UNIQUE: `Username`, `Email`
- - CHECK: `Username` non-empty, `Email` LIKE `%_@_%.__%`
+ - ASP.NET Identity-Basis: nutzt UserName, NormalizedUserName, Email, NormalizedEmail, PasswordHash, SecurityStamp, ConcurrencyStamp, Lockout-Felder, AccessFailedCount.
+ - Filtered UNIQUE: `IX_AppUser_UserName` und `IX_AppUser_Email` (jeweils WHERE NOT NULL).
+ - **Keine** CHECK-Constraints für UserName-Non-Empty oder Email-Format im Schema — Validation läuft Client + Server (siehe **Validation-Regeln** V01/V02).
+ - Zusätzliche Spalte `CreatedAt` (datetime2(0)).
 - `Puzzle` — Killer-Sudoku-Definition, **keine** Solution-Spalte
  - FK: `CreatedById → AppUser(Id)`
  - CHECK: `Difficulty BETWEEN 1 AND 3`
@@ -213,7 +156,7 @@ Vollständiges Schema in **Datenbank-Skript**. Folgende Objekte werden angelegt:
  - CHECK: `RowIdx`, `ColIdx` BETWEEN 0 AND 8
 - `Game` — Spiel-Session
  - FK: `UserId → AppUser(Id)`, `PuzzleId → Puzzle(Id)`
- - CHECK: `TimeSeconds ≥ 0`, `HintsUsed ≥ 0`, `Score ≥ 0`, `TotalPausedSeconds ≥ 0`
+ - CHECK: `TimeSeconds` NULL oder ≥ 0, `Score` NULL oder ≥ 0, `HintsUsed ≥ 0`, `TotalPausedSeconds ≥ 0`
  - Indices: `IX_Game_UserId`, `IX_Game_PuzzleId`
 - `GameCell` — Aktueller Spielzustand pro Zelle
  - PK: `(GameId, RowIdx, ColIdx)`

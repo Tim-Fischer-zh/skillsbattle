@@ -90,8 +90,8 @@ Service-Methoden geben statt Exceptions strukturierte Result-Typen zurück (sieh
 
 | Result-Type | Verwendet von | Quelle |
 |-------------|---------------|--------|
-| `RegisterResult` | `IAuthService.RegisterAsync` | UC02 |
-| `LoginResult` | `IAuthService.LoginAsync` | UC03 |
+| `IdentityResult` | `UserManager<AppUser>.CreateAsync` | UC02 (ASP.NET-Identity-Standard-Result) |
+| `SignInResult` | `SignInManager<AppUser>.PasswordSignInAsync` | UC03 (ASP.NET-Identity-Standard-Result) |
 | `ValidationResult` | `IPuzzleService.ValidateStructureAsync` | UC04 |
 | `SavePuzzleResult` | `IPuzzleService.SaveIfSolvableAsync` | UC05 |
 | `CheckResult` | `IGameService.CheckSolutionAsync` | UC09 |
@@ -191,7 +191,7 @@ Da der Solver keine externen Dependencies hat, ist er als **reiner Unit-Test** p
 
 ### Konzept
 
-Datenzugriff über **Entity Framework Core 10** mit eigenem `SudokuDbContext`. Migrations werden **nicht** mit EF-Migrations gemacht, sondern das DB-Schema wird über ein deklaratives SQL-Script (**Datenbank-Skript**) angelegt — das entspricht der README-Vorgabe (siehe README §1.3, Submission-Artefakt).
+Datenzugriff über **Entity Framework Core 10** mit eigenem `SudokuDbContext`. Das Schema wird über **EF-Migrations** versioniert (Source of Truth liegt in `KillerSudoku.Data/Persistence/Migrations/`). Aus den Migrations wird das von README §1.3 geforderte deklarative Submission-Script **Datenbank-Skript** per `dotnet ef migrations script` exportiert — beides bleibt konsistent.
 
 ### DbContext-Scope
 
@@ -204,13 +204,19 @@ Datenzugriff über **Entity Framework Core 10** mit eigenem `SudokuDbContext`. M
 
 ### Migrations
 
-> Migration-Strategie: **Single deklaratives SQL-Script** statt EF-Migrations.
+> Migration-Strategie: **EF-Migrations als Source of Truth**, **Datenbank-Skript** als generiertes Submission-Artefakt.
+
+Workflow:
+
+1. Schema-Änderung in den C#-Entities oder im `SudokuDbContext` → `dotnet ef migrations add <Name>` erzeugt eine neue Migration unter `KillerSudoku.Data/Persistence/Migrations/`.
+2. Beim Container-Start (oder via `dotnet ef database update`) werden alle ausstehenden Migrations angewendet.
+3. Das deklarative Submission-Skript **Datenbank-Skript** wird per `dotnet ef migrations script --idempotent -o db/sudoku.sql` exportiert — damit hat der Prüfer ein eigenständiges, idempotentes Skript zum manuellen Ausführen (README §1.3).
 
 Begründung:
 
-- README §1.3 fordert explizit ein **Datenbank-Skript**-Skript mit CREATE-Statements
-- Idempotenz wird durch Drop-If-Exists am Skript-Anfang gewährleistet (siehe **Datenbank-Skript** Zeilen 22–31)
-- Wettbewerbs-Submission soll für Prüfer 1-Click-reproduzierbar sein (SSMS + Run Script)
+- EF-Migrations geben versioniertes, reversibles Schema-Management (`dotnet ef migrations remove` / `database update <vorherige>`)
+- Der Export liefert genau das von §1.3 geforderte **Datenbank-Skript** ohne manuelle Pflege zweier Wahrheits-Sources
+- Idempotenz-Modus (`--idempotent`) macht das Skript wiederholt ausführbar für SSMS / `sqlcmd`
 
 ### EF-Modell-Mapping
 
@@ -256,7 +262,7 @@ Layout.razor
 │ └── RegisterForm.razor
 ├── Login.razor (S3, public, UC03)
 │ └── LoginForm.razor
-├── PuzzleList.razor (S4, [Authorize], UC12)
+├── Puzzles.razor (S4, [Authorize], UC12)
 │ ├── FilterBar.razor
 │ └── PuzzleCard.razor
 ├── EnterPuzzle.razor (S5, [Authorize], UC04+UC05)
@@ -348,11 +354,13 @@ services.ConfigureApplicationCookie(options =>
  options.Cookie.HttpOnly = true;
  options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
  options.Cookie.SameSite = SameSiteMode.Lax;
- options.ExpireTimeSpan = TimeSpan.FromHours(24);
- options.SlidingExpiration = true;
+ options.ExpireTimeSpan = TimeSpan.FromHours(2);
+ options.LoginPath = "/login";
+ options.AccessDeniedPath = "/access-denied";
 });
 ```
 
+> **Cookie-Lifetime 2 h fix** (kein SlidingExpiration): minimiert das Theft-Window bei kompromittiertem Cookie. Für eine Login-Required-App ohne sensitive Long-Running-Sessions die sicherere Wahl gegenüber 24 h mit Sliding-Refresh.
 > **SameSite=Lax** (statt `Strict`) erlaubt Top-Level-Navigation mit Cookie (z.B. Klick auf externen Link, der zurück führt). `Lax` ist OWASP-Recommendation für Web-Apps mit normalem Login-Flow.
 
 ## Verweise

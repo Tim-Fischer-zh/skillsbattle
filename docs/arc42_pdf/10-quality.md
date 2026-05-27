@@ -86,7 +86,7 @@ Jedes Szenario ist tabellarisch nach dem arc42-Schema **Quelle · Stimulus · Ar
 |------|------|
 | Quelle | Externer Angreifer / Security-Reviewer |
 | Stimulus | Login-POST mit unbekanntem Username oder falschem Passwort |
-| Artefakt | `IAuthService.LoginAsync` |
+| Artefakt | `Login.razor` mit `SignInManager<AppUser>.PasswordSignInAsync` |
 | Reaktion | Server antwortet mit **generischer** Fehlermeldung "Username oder Passwort falsch." — **keine** Unterscheidung zwischen "User existiert nicht" und "Passwort falsch" |
 | Antwortmaß | Response-Body, Statuscode und Antwortzeit identisch für beide Fälle (kein Timing-Leak via getrennten Code-Pfaden) |
 | README-Beleg | §2.1 UC2 "a login **is required**." in Kombination mit Sicherheits-Best-Practices (**V03**) |

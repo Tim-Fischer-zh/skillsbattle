@@ -23,7 +23,7 @@ flowchart LR
  subgraph App["Blazor Server App"]
  Kestrel["Kestrel Web Server<br/>localhost:5001 (HTTPS)"]
  Components["Razor Components<br/>(Server-Side Rendering)"]
- Services["Service-Layer<br/>IAuthService, IPuzzleService,<br/>IGameService, IHintService,<br/>ISolverService, IHighscoreService"]
+ Services["Service-Layer<br/>IPuzzleService, IGameService,<br/>IHintService, ISolverService,<br/>IHighscoreService<br/>(+ ASP.NET-Identity für Auth)"]
  EF["EF Core 10<br/>SudokuDbContext"]
  Kestrel --> Components
  Components --> Services
@@ -119,7 +119,7 @@ dotnet build -c Release
 ### Run (Entwicklung)
 
 ```bash
-dotnet run --project src/Sudoku.Web
+dotnet run --project source/src/KillerSudoku.Web
 ```
 
 Die App ist anschliessend unter `https://localhost:5001` erreichbar.
@@ -164,13 +164,17 @@ AppDev_Fischer_Tim.zip
 │ ├── arc42.pdf (Kapitel 01–12 als ein PDF)
 │ ├── mockups/ (PNG-Exports aus Figma)
 │ └── test-protocol.pdf
-├── src/ (vollständiger .NET-Source)
-│ ├── Sudoku.Web/ (Blazor Server App)
-│ ├── Sudoku.Domain/ (Solver, Domain-Modelle)
-│ ├── Sudoku.Data/ (EF Core, Repositories)
-│ ├── Sudoku.Tests.Unit/
-│ ├── Sudoku.Tests.Integration/
-│ └── Sudoku.Tests.E2E/
+├── source/ (.NET 10 Solution)
+│ ├── KillerSudoku.slnx
+│ ├── src/
+│ │ ├── KillerSudoku.Web/ (Blazor Server App)
+│ │ ├── KillerSudoku.Core/ (Solver, Domain, Services, DTOs)
+│ │ └── KillerSudoku.Data/ (EF Core, Entities, DbContext, Service-Impl)
+│ └── tests/
+│ ├── KillerSudoku.UnitTests/ (xUnit)
+│ ├── KillerSudoku.IntegrationTests/ (xUnit + Testcontainers-MSSQL)
+│ ├── KillerSudoku.ComponentTests/ (bUnit)
+│ └── KillerSudoku.E2ETests/ (Playwright .NET)
 ├── bin/
 │ └── Release/net10.0/ (Build-Output, ausführbare Files)
 └── db/
@@ -182,13 +186,13 @@ AppDev_Fischer_Tim.zip
 Das README fordert "executable files". Für .NET 10 + Blazor Server bedeutet dies:
 
 ```bash
-dotnet publish -c Release -o bin/Release/net10.0
+dotnet publish source/src/KillerSudoku.Web -c Release -o bin/Release/net10.0
 ```
 
 Der Publish-Output enthält:
 
-- `Sudoku.Web.dll` (Haupt-Assembly)
-- `Sudoku.Web.exe` (Windows-Launcher, falls auf Windows publiziert)
+- `KillerSudoku.Web.dll` (Haupt-Assembly)
+- `KillerSudoku.Web.exe` (Windows-Launcher, falls auf Windows publiziert)
 - Alle Dependency-DLLs
 - `appsettings.json` (mit Connection-String-Slot)
 - `wwwroot/` (statische Assets, CSS, JS)
@@ -197,7 +201,7 @@ Starten der publizierten App:
 
 ```bash
 cd bin/Release/net10.0
-dotnet Sudoku.Web.dll
+dotnet KillerSudoku.Web.dll
 ```
 
 ### Datenbank-Script
@@ -230,7 +234,7 @@ README §2.6 weiter: "For the delivery, create a PDF document." Die arc42-Kapite
 
 ### Termin-Constraints
 
-README §1.4: "Note that the submission of the planned test cases must take place **by 11:30 o'clock**." Der Test-Plan ist in **Test-Protokoll** dokumentiert und wird vor 11:30:00 abgegeben (siehe Qualitätsziel Q3 in [Kapitel 1 §1.2](#chapter-1)).
+README §1.4: "Note that the submission of the planned test cases must take place **by 12 o'clock**." Der Test-Plan ist in **Test-Protokoll** dokumentiert und wird vor 12:00:00 abgegeben (siehe Qualitätsziel Q3 in [Kapitel 1 §1.2](#chapter-1)).
 
 ---
 
@@ -347,13 +351,12 @@ Die DB-Files (`mdf` / `ldf`) liegen in `/var/opt/mssql` im Container. Ein Named-
 
 ### CI / Registry-Push
 
-Die GitHub-Actions-Pipeline **.github/workflows/docker.yml** baut bei jedem `push` auf `main` das Image und pusht es nach `ghcr.io/tim-fischer-zh/killer-sudoku` mit Tags:
+Die GitHub-Actions-Pipeline **.github/workflows/deploy.yml** baut bei jedem `push` auf `main` das Image und pusht es nach `ghcr.io/tim-fischer-zh/killer-sudoku` mit Tags:
 
 - `:latest` (auf default-Branch)
-- `:sha-<git-short-sha>` (immutable per Commit)
-- `:<branch>` / `:<tag>` bei feature-Branches und Releases
+- `:<git-short-sha>` (immutable per Commit)
 
-Die Pipeline nutzt GHA-Cache (`type=gha`) für Schichten — der Multi-Stage-`dotnet publish` läuft inkremental und nicht bei jedem Push komplett neu.
+Im Anschluss führt derselbe Workflow das Production-Deployment auf der VPS aus (siehe §7.6).
 
 ### Submission-Inhalt (Update zu §7.4)
 
@@ -361,11 +364,124 @@ Zusätzlich zum ZIP-Inhalt aus §7.4 enthält das Repository (und damit `src/` i
 
 - `Dockerfile` (Repo-Root)
 - `docker-entrypoint.sh` (Repo-Root)
-- `docker-compose.yml` (Repo-Root)
+- `docker-compose.yml` (Repo-Root, lokal)
+- `docker-compose.prod.yml` (Repo-Root, Production — siehe §7.6)
 - `.dockerignore` (Repo-Root)
-- `.github/workflows/docker.yml`
+- `.github/workflows/deploy.yml`
 
 Der Prüfer kann damit zwischen den drei Optionen (Pull / Local-Build / Compose) wählen.
+
+---
+
+## §7.6 Production-Deployment (Bonus: Live-Demo unter web17skill.com)
+
+Über das von der Aufgabenstellung geforderte lokale Setup (§7.1–§7.5) hinaus wird die Anwendung **zusätzlich** auf einer öffentlich erreichbaren VPS-Instanz betrieben, damit der Prüfer einen Live-Stand der App ohne lokale Installation aufrufen kann. Die Produktions-Topologie ist **kein** Ersatz für das lokale Setup — sie ergänzt es.
+
+### Live-Endpoint
+
+| Item | Wert |
+|------|------|
+| Domain | `web17skill.com` |
+| Protokoll | HTTPS (TLS-Termination bei Cloudflare) |
+| TLS-Zertifikat | Cloudflare-managed (automatisch) |
+| Health-Endpoint | `https://web17skill.com/health` |
+
+### Topologie
+
+```mermaid
+flowchart LR
+ User["End-User<br/>(Prüfer)"]
+ subgraph Cloudflare["Cloudflare Edge"]
+ CFEdge["Cloudflare Network<br/>TLS-Termination<br/>WAF + DDoS"]
+ end
+ subgraph VPS["VPS (Linux-Host)"]
+ direction TB
+ Cloudflared["cloudflared<br/>(systemd-Service)<br/>Outbound-Tunnel zu Cloudflare"]
+ Loopback["127.0.0.1:80"]
+ Runner["GitHub Actions<br/>Self-Hosted Runner<br/>(systemd-Service)"]
+ subgraph Container["killersudoku Container"]
+ App["Kestrel + Blazor<br/>:8080"]
+ SQL["sqlservr<br/>:1433"]
+ end
+ Cloudflared -->|"reverse-tunnel HTTP"| Loopback
+ Loopback -->|"docker port-publish<br/>127.0.0.1:80 → :8080"| App
+ Runner -.->|"baut + deployed bei push"| Container
+ end
+ User -->|"HTTPS web17skill.com"| Cloudflare
+ Cloudflare -.->|"Tunnel (mTLS, outbound init)"| Cloudflared
+```
+
+### Knoten-Inventar (Production)
+
+| Knoten | Typ | Adresse | Quelle |
+|--------|-----|---------|--------|
+| Cloudflare Edge | Managed CDN/Proxy | `web17skill.com` | externer Dienst |
+| VPS | Linux-Host (Docker, systemd) | privat, nicht-öffentlich erreichbar | Tim Fischer Setup |
+| `cloudflared` | systemd-Service | bindet `127.0.0.1:80` als Tunnel-Origin | Cloudflare-Dokumentation |
+| GitHub Actions Self-Hosted Runner | systemd-Service | derselbe VPS-Host wie Cloudflared | GitHub-Dokumentation |
+| killersudoku-Container | Docker-Container | `127.0.0.1:80 → 8080` | `docker-compose.prod.yml` |
+
+### Kommunikationspfade (Production)
+
+| Von | Zu | Protokoll | Bemerkung |
+|-----|----|-----------|-----------|
+| End-User-Browser | Cloudflare | HTTPS (TLS 1.3) | Cloudflare-WAF und DDoS-Mitigation aktiv |
+| Cloudflare | `cloudflared` auf VPS | mTLS-Tunnel (outbound initiiert) | Kein eingehender Port auf der VPS offen — Tunnel terminiert HTTPS bei Cloudflare und forwarded plain HTTP an `127.0.0.1:80` |
+| `cloudflared` | Container | HTTP `127.0.0.1:80` | Docker-Port-Publish bindet bewusst nur auf Loopback — Container ist **nicht** von außen direkt erreichbar |
+| Container-intern | sqlservr | TDS `localhost:1433` | DB-Port **nicht** publiziert — interner Zugriff nur über Loopback im Container |
+
+### Warum Cloudflare-Tunnel statt offener Port?
+
+| Aspekt | Tunnel (gewählt) | Klassischer Reverse-Proxy mit offenem Port |
+|--------|------------------|--------------------------------------------|
+| Eingehende Firewall-Regeln auf VPS | keine nötig | Port 80/443 müssen offen sein |
+| TLS-Zertifikat | Cloudflare-managed (auto-renew) | selbst-verwaltet (Let's Encrypt o.ä.) |
+| DDoS-Schutz | inkludiert | nicht inkludiert |
+| IP-Adresse der VPS sichtbar | nein | ja |
+
+Der Tunnel ist **outbound initiiert** — die VPS hält die Verbindung zu Cloudflare offen, nicht umgekehrt. Das bedeutet, dass auf der VPS **keine eingehenden Ports** in der Firewall geöffnet werden müssen.
+
+### `docker-compose.prod.yml` — Production-Unterschiede
+
+Die Production-Compose (**docker-compose.prod.yml**) unterscheidet sich an drei Stellen von der lokalen Compose (siehe §7.5):
+
+| Aspekt | Lokal (`docker-compose.yml`) | Production (`docker-compose.prod.yml`) |
+|--------|------------------------------|----------------------------------------|
+| App-Port-Bind | `8080:8080` (alle Interfaces) | `127.0.0.1:80:8080` (nur Loopback, weil `cloudflared` lokal terminiert) |
+| SQL-Port-Bind | `127.0.0.1:1433:1433` (lokale SSMS-Inspektion) | nicht publiziert (keine externe DB-Inspektion in Produktion) |
+| Image-Quelle | lokaler `build:` Context | gezogen aus GHCR (`pull_policy` nicht gesetzt — Runner baut lokal und compose nutzt das Image direkt aus dem lokalen Daemon) |
+
+### CI-Pipeline (`.github/workflows/deploy.yml`)
+
+Der Workflow läuft auf `runs-on: self-hosted` — also direkt auf der VPS. Vier Schritte:
+
+1. **Checkout** des Repos auf der VPS
+2. **`docker build`** — lokal auf der VPS (Layer-Cache bleibt zwischen Runs erhalten)
+3. **Push** der Image-Tags `:latest` und `:<short-sha>` nach GHCR (für Versionierung und ggf. spätere Rollbacks)
+4. **`docker compose -f docker-compose.prod.yml up -d --remove-orphans`** — startet/ersetzt den Container; das Image liegt nach `docker build` bereits im lokalen Daemon, kein erneuter Pull nötig
+
+Abschließend führt der Workflow einen **Smoke-Test** durch (`curl https://web17skill.com/health` mit Retry über 120 s) und schlägt fehl, falls der Live-Endpoint nicht innerhalb von 2 Minuten gesund antwortet.
+
+### Required Secrets im GitHub-Repository
+
+| Secret | Zweck |
+|--------|-------|
+| `GHCR_TOKEN` | Classic-PAT mit Scopes `write:packages` + `read:packages` für GHCR-Push |
+| `MSSQL_SA_PASSWORD` | SA-Passwort des Production-SQL-Servers (Strong-Password-Policy) |
+
+Beide werden im Workflow als Job-Env-Variablen exponiert und vom Container über `.env` bzw. das DI-Setup konsumiert.
+
+### Trennung Lokal ↔ Production
+
+| Eigenschaft | Lokal (Spec §1.3) | Production (Bonus) |
+|-------------|--------------------|--------------------|
+| Pflicht laut Aufgabenstellung | ja | nein |
+| Adresse | `localhost:5001` (native) bzw. `localhost:8080` (Compose) | `https://web17skill.com` |
+| TLS | self-signed Dev-Cert | Cloudflare-managed (echtes Zertifikat) |
+| Persistenz | Named Volume oder lokaler SQL-Server | Named Volume `mssql-data` auf VPS |
+| Deploy-Mechanismus | manueller `dotnet run` / `docker compose up` | Push auf `main` → automatischer CI-Build + Deploy |
+
+Beide Setups verwenden **dasselbe Image** und **dasselbe Schema** — Production ist nur ein anderer Lauf-Modus, kein architektonischer Unterschied. Die Bewertung der Submission stützt sich ausschließlich auf das lokale Setup; die Live-Variante dient als Bonus für eine bequemere Demonstration.
 
 ---
 

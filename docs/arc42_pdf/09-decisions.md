@@ -76,6 +76,8 @@ UC08 (Show High Score) zeigt die Top-N abgeschlossenen Games sortiert nach Score
 - (+) `WHERE g.IsCompleted = 1 AND g.Score IS NOT NULL` stellt sicher, dass nur abgeschlossene Spiele erscheinen — passt zu UC10 AC10.3
 - (−) Performance: bei sehr vielen Games (>10⁶) wäre View langsamer als materialisierte Tabelle. Für die Wettbewerbs-Submission (lokales Setup, wenige Spiele) irrelevant.
 - (−) Pagination der View erfordert `OFFSET/FETCH` in jeder Abfrage statt vorberechneter Sortierung
+- **Implementierungs-Realität:** Der `HighscoreService` liest aktuell **nicht** über die View, sondern direkt über LINQ-Joins (`_db.Games ⋈ AppUser ⋈ Puzzle WHERE IsCompleted = 1`). Der `SudokuDbContext` mappt `vw_Highscore` nicht als Keyless-Entity. Die View bleibt im SQL-Schema als Reserve — ein späterer Wechsel auf `FromSqlRaw("SELECT … FROM vw_Highscore")` oder einen Keyless-DbSet ist möglich, ohne dass das Schema geändert werden muss.
+- Trade-Off-Begründung: LINQ erlaubt typsicheren Difficulty-Filter (`GetTopAsync(limit, byte? difficulty)`), Order-Stabilität (`OrderByDescending(Score).ThenBy(TimeSeconds)`) und Rank-Vergabe direkt im C#-Code. Bei wachsender Datenmenge oder Bedarf an View-Wartbarkeit ist Re-Mapping auf `vw_Highscore` der nächste sinnvolle Schritt.
 
 ---
 
@@ -127,6 +129,8 @@ END;
 - Begründung im Kommentar des SQL-Skripts (Zeile 84–86): "Constraint 'jede Zelle pro Puzzle in genau einem Cage' wird über einen INSTEAD-OF-Trigger durchgesetzt"
 
 > **Anmerkung zum SQL-Kommentar:** Der Kommentar im Skript spricht von "INSTEAD-OF-Trigger", umgesetzt wird tatsächlich ein `AFTER INSERT, UPDATE` Trigger. Funktional identisch (Rollback bei Konflikt), aber Wording im Kommentar bleibt zur Konsistenz mit dem Submission-File.
+
+> **Anmerkung zum EF-Modell:** Der Trigger `trg_CageCell_UniquePerPuzzle` lebt ausschließlich im SQL-Skript `db/sudoku.sql`. Er ist im `SudokuDbContext` (`OnModelCreating`) **nicht** als HasTrigger-Konfiguration oder Migration-Operation modelliert. Konsequenz: Wer die Datenbank ausschließlich über `EnsureCreated` oder eine künftige EF-Migration aufsetzt, würde den Trigger nicht erhalten. Die aktuelle Submission setzt das Schema immer über **Datenbank-Skript** (Container-Entrypoint oder manueller `sqlcmd`-Aufruf), daher ist der Trigger im Lauf garantiert.
 
 ---
 
@@ -443,7 +447,7 @@ Alternativen:
 **Begründung:**
 - Der Wettbewerbs-Kontext ist Submission, nicht Production. Der Prüfer bewertet ein Mal — Skalierung oder Update-Pfade sind nicht relevant.
 - README §1.3 ("running on your machine") wird trotz Container erfüllt — der Container läuft auf der Maschine des Prüfers, die DB läuft im Container des Prüfers. Kein Cloud-Service involviert.
-- Das Image wird bei jedem `main`-Push via **.github/workflows/docker.yml** gebaut und nach `ghcr.io/tim-fischer-zh/killer-sudoku:latest` gepusht → Prüfer kann mit einem `docker pull` ohne Local-Build verifizieren.
+- Das Image wird bei jedem `main`-Push via **.github/workflows/deploy.yml** gebaut und nach `ghcr.io/tim-fischer-zh/killer-sudoku:latest` gepusht → Prüfer kann mit einem `docker pull` ohne Local-Build verifizieren.
 - Supervisor-Script handhabt Race-Condition (Wait-for-DB), idempotenter Schema-Apply via Marker-File.
 - Die Native-Variante bleibt als Fallback dokumentiert für Prüfer ohne Docker.
 
@@ -457,12 +461,59 @@ Alternativen:
 - (−) Healthcheck deckt nur die App ab (`curl :8080/health`), nicht die DB direkt — DB-Health wird implizit über App-Health geprüft.
 
 **Operatives Setup:**
-- `Dockerfile`, `docker-entrypoint.sh`, `docker-compose.yml`, `.dockerignore` im Repo-Root
-- GitHub-Actions-Workflow für Build & Push nach `ghcr.io`
+- `Dockerfile`, `docker-entrypoint.sh`, `docker-compose.yml`, `docker-compose.prod.yml`, `.dockerignore` im Repo-Root
+- GitHub-Actions-Workflow für Build & Push nach `ghcr.io` sowie Production-Deploy (siehe ADR-016)
 - Persistenz via Named-Volume `mssql-data`
 - Connection-String über `ConnectionStrings__Sudoku` Env-Var override-bar
 
 → Vollständiges Setup in [§7.5 Container-Deployment](#chapter-7).
+
+---
+
+## ADR-016 — Production-Deployment via Self-Hosted Runner + Cloudflare-Tunnel
+
+**Status:** Akzeptiert
+
+**Kontext:**
+Über das von der Aufgabenstellung geforderte lokale Setup hinaus soll die App **zusätzlich** als Live-Demo unter einer öffentlichen Domain (`web17skill.com`) erreichbar sein, damit der Prüfer eine bereits laufende Instanz aufrufen kann, ohne lokal etwas installieren zu müssen. Diese Production-Variante ist **nicht** Pflicht laut Spec — sie ist ein Bonus.
+
+Zu entscheiden waren zwei Achsen:
+
+1. **Deploy-Trigger:** SSH-Deploy aus GitHub-Hosted-Runner vs. Self-Hosted-Runner direkt auf der VPS.
+2. **Public-Exposure:** Klassischer Reverse-Proxy mit offenem Port 443 (Nginx/Caddy + Let's Encrypt) vs. Cloudflare-Tunnel (outbound initiiert, keine offenen Ports).
+
+Alternativen:
+
+| Variante | Deploy | Exposure | Bewertung |
+|----------|--------|----------|-----------|
+| A | SSH-Action aus GitHub-Hosted | Nginx + Let's Encrypt | klassisch, aber: SSH-Key-Verwaltung, offene Firewall-Regeln (80/443), eigene TLS-Renewal-Logik |
+| B | SSH-Action aus GitHub-Hosted | Cloudflare-Tunnel | weniger Firewall-Aufwand, aber: SSH-Key bleibt Angriffsfläche |
+| C | Self-Hosted-Runner auf VPS | Cloudflare-Tunnel | kein SSH-Pfad, kein offener Port, lokale Docker-Builds nutzen lokalen Cache |
+
+**Entscheidung:**
+**Option C** — Self-Hosted-Runner direkt auf der VPS in Kombination mit Cloudflare-Tunnel.
+
+**Begründung:**
+- Der Runner ist gleichzeitig Docker-Host → `docker build` + `docker compose up` laufen ohne Image-Transport (lokaler Daemon-Cache wird zwischen Runs wiederverwendet).
+- Kein SSH-Mechanismus nötig → kein Deploy-Key, keine `appleboy/ssh-action`-Dependency.
+- Cloudflare-Tunnel ist outbound initiiert → keine eingehenden Ports auf der VPS offen; TLS terminiert bei Cloudflare (managed Cert, automatische Erneuerung).
+- DDoS-Mitigation und WAF inkludiert.
+- Der GHCR-Push (Tags `latest` + `<short-sha>`) bleibt erhalten — die Production-Compose nutzt zwar das lokal gebaute Image, aber die Tags in der Registry erlauben jederzeit Rollback oder externes Pull-Deployment.
+
+**Konsequenz:**
+- (+) Push auf `main` → automatischer Live-Deploy in unter 2 Minuten inkl. Smoke-Test gegen `https://web17skill.com/health`.
+- (+) Keine externe Cloud-Plattform — VPS bleibt unter eigener Kontrolle, Cloudflare ist nur als Tunnel-Endpoint involviert (keine Anwendungslogik bei Cloudflare).
+- (+) Container bindet bewusst nur auf Loopback (`127.0.0.1:80:8080`) — selbst bei Cloudflare-Tunnel-Ausfall ist die App nicht von außen direkt erreichbar.
+- (−) Der Self-Hosted-Runner ist ein zusätzlicher Service auf der VPS, der gewartet werden muss (Updates, Logs).
+- (−) Wenn die VPS offline ist, kann nicht deployed werden (kein Fallback auf GitHub-Hosted-Runner). Für den Submission-Kontext akzeptabel.
+
+**Operatives Setup:**
+- `.github/workflows/deploy.yml` mit `runs-on: self-hosted`
+- `docker-compose.prod.yml` mit Loopback-Bind und ohne SQL-Port-Publish
+- `cloudflared` als systemd-Service auf der VPS
+- GitHub-Secrets: `GHCR_TOKEN` (Classic-PAT), `MSSQL_SA_PASSWORD`
+
+→ Vollständiges Setup in [§7.6 Production-Deployment](#chapter-7).
 
 ---
 
@@ -485,6 +536,7 @@ Alternativen:
 | [ADR-013](#adr-013--hint-strategie-naked-single--cage-forced--solver-fallback) | Hint-Strategie | UC07 |
 | [ADR-014](#adr-014--auswahl-der-3-zusätzlichen-use-cases) | 3 zusätzliche UCs | README §2.3 |
 | [ADR-015](#adr-015--single-image-container-für-prüferbequemlichkeit) | Single-Image Docker (DB + App) | [§7.5](#chapter-7) |
+| [ADR-016](#adr-016--production-deployment-via-self-hosted-runner--cloudflare-tunnel) | Production-Deploy via Self-Hosted Runner + Cloudflare-Tunnel | [§7.6](#chapter-7) |
 
 ---
 

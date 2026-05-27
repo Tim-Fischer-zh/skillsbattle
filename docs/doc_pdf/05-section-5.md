@@ -15,7 +15,7 @@ Layer-Konvention: Client-Side (Blazor `EditForm` / Data-Annotations + JS), Serve
 | Client + Server | Pattern: `^[A-Za-z0-9_-]+$` (keine Sonderzeichen, kein Whitespace) |
 | Server + DB | UNIQUE (case-insensitive für Login, exact für Storage) |
 | Server | Trim vor Speichern (kein leading/trailing whitespace) |
-| DB | NOT NULL, NVARCHAR(50), `CK_AppUser_Username_NotEmpty` |
+| DB | ASP.NET Identity-Default: `UserName` NVARCHAR(50), filtered UNIQUE Index (`IX_AppUser_UserName` WHERE NOT NULL); **kein** Format-CHECK-Constraint im SQL-Schema. Länge/Pattern werden ausschließlich Client + Server geprüft. |
 
 **Fehlermeldung:** "Username muss 3–50 Zeichen lang sein und nur Buchstaben, Zahlen, `_` oder `-` enthalten."
 
@@ -28,7 +28,7 @@ Layer-Konvention: Client-Side (Blazor `EditForm` / Data-Annotations + JS), Serve
 | Client + Server | Regex `^[^\s@]+@[^\s@]+\.[^\s@]+$` (basic) |
 | Server | Lowercase vor Speichern |
 | Server + DB | UNIQUE |
-| DB | NOT NULL, NVARCHAR(255), `CK_AppUser_Email_Format` (LIKE pattern) |
+| DB | ASP.NET Identity-Default: `Email` NVARCHAR(255), filtered UNIQUE Index (`IX_AppUser_Email` WHERE NOT NULL); **kein** Format-CHECK-Constraint im SQL-Schema. Format-Regex läuft Client + Server. |
 
 **Fehlermeldung:** "Bitte gib eine gültige Email-Adresse ein."
 
@@ -43,7 +43,7 @@ Layer-Konvention: Client-Side (Blazor `EditForm` / Data-Annotations + JS), Serve
 | Client | Confirm-Field muss matchen |
 | Server | Hash mit ASP.NET Identity (PBKDF2) oder BCrypt |
 | Server | **NIE im Klartext loggen/serialisieren** |
-| DB | NVARCHAR(500), NOT NULL (Hash-Storage) |
+| DB | `PasswordHash` NVARCHAR(MAX), nullable (Identity-Default); Pflicht-Inhalt durch UC02-Flow garantiert |
 
 **Fehlermeldung Register:** "Passwort muss mindestens 8 Zeichen lang sein und Buchstaben + Zahlen enthalten."
 **Fehlermeldung Login (falsch):** "Username oder Passwort falsch." _(absichtlich generisch — kein Username-Existenz-Hinweis)_
@@ -149,7 +149,7 @@ Layer-Konvention: Client-Side (Blazor `EditForm` / Data-Annotations + JS), Serve
 | Layer | Regel |
 |-------|-------|
 | Client | Hint-Button disabled wenn alle 81 Zellen befüllt |
-| Server | `GetHintAsync` returnt Fehler wenn Game completed oder Grid voll |
+| Server | `HintService.GetHintAsync` wirft `InvalidOperationException` wenn Game completed, Grid voll oder Game-State nicht lösbar (statt allgemeines "Fehler"). Implementiert in `HintService.cs`. |
 
 ---
 

@@ -45,7 +45,7 @@ Die folgenden drei Top-Qualitätsziele leiten alle Architektur- und Implementier
 |---|---------------|---------------------------|-------------|
 | **Q1** | **Korrektheit des Solvers (Funktionale Korrektheit)** | README §1 fordert "The solution **must be unique**." und §2.1 UC4 fordert "Solutions **must be calculated with an algorithm**." Der Solver ist die zentrale Logik-Komponente — falsche Ergebnisse zerstören UC05, UC07, UC09. | Solver-Unit-Tests gegen die 2 README-Beispiele + Edge-Cases (unlösbar, mehrdeutig). Performance-Boundary < 2s (siehe **AC11.2**). |
 | **Q2** | **Lösungs-Eindeutigkeit (Konsistenz beim Speichern)** | README §1 "The solution must be unique." + §2.1 UC5 "The puzzle **can only be saved if it is solvable**." Multi-Solution-Puzzles werden abgelehnt — nicht nur Zero-Solution (siehe **V07**). | Integration-Test: Speichern eines mehrdeutigen Puzzles → kein DB-Row. |
-| **Q3** | **Test-Abdeckung & Test-Plan-Termin** | README §3.1 fordert pro UC mind. 1 positiver + 1 negativer + (wo möglich) 1 Boundary-Test. README §1.4: "submission of the planned test cases must take place **by 11:30 o'clock**." | Test-Plan vor 11:30 abgegeben; Unit-Tests in Test-Framework lt. README §3.2 ("**should be implemented with a test framework**"). Coverage-Ziel siehe [Kapitel 10](#chapter-10). |
+| **Q3** | **Test-Abdeckung & Test-Plan-Termin** | README §3.1 fordert pro UC mind. 1 positiver + 1 negativer + (wo möglich) 1 Boundary-Test. README §1.4: "submission of the planned test cases must take place **by 12 o'clock**." | Test-Plan vor 12:00 abgegeben; Unit-Tests in Test-Framework lt. README §3.2 ("**should be implemented with a test framework**"). Coverage-Ziel siehe [Kapitel 10](#chapter-10). |
 
 ### Weitere relevante Qualitätsmerkmale (sekundär)
 

@@ -22,69 +22,69 @@ erDiagram
 
     AppUser {
         int       Id                    PK
-        nvarchar  UserName              UK_nullable
-        nvarchar  NormalizedUserName    UK_nullable
-        nvarchar  Email                 UK_nullable
+        nvarchar  UserName              UK "filtered, WHERE NOT NULL"
+        nvarchar  NormalizedUserName    UK
+        nvarchar  Email                 UK "filtered, WHERE NOT NULL"
         nvarchar  NormalizedEmail
         bit       EmailConfirmed
-        nvarchar  PasswordHash          nullable
-        nvarchar  SecurityStamp         nullable
-        nvarchar  ConcurrencyStamp      nullable
-        nvarchar  PhoneNumber           nullable
+        nvarchar  PasswordHash          "nullable per Identity"
+        nvarchar  SecurityStamp         "nullable"
+        nvarchar  ConcurrencyStamp      "nullable"
+        nvarchar  PhoneNumber           "nullable"
         bit       PhoneNumberConfirmed
         bit       TwoFactorEnabled
-        datetimeoffset LockoutEnd       nullable
+        datetimeoffset LockoutEnd       "nullable"
         bit       LockoutEnabled
         int       AccessFailedCount
         datetime2 CreatedAt
     }
     Puzzle {
         int       Id          PK
-        tinyint   Difficulty
+        tinyint   Difficulty  "CHECK 1..3"
         int       CreatedById FK
         datetime2 CreatedAt
     }
     Cage {
         int     Id        PK
         int     PuzzleId  FK
-        tinyint Sum
+        tinyint Sum       "CHECK 1..45"
     }
     CageCell {
-        int     CageId    PK,FK
-        tinyint RowIdx    PK
-        tinyint ColIdx    PK
+        int     CageId    PK
+        tinyint RowIdx    PK "0..8"
+        tinyint ColIdx    PK "0..8"
     }
     Game {
         int       Id                 PK
         int       UserId             FK
         int       PuzzleId           FK
         datetime2 StartTime
-        datetime2 EndTime            nullable
-        int       TimeSeconds        nullable
-        int       HintsUsed
-        int       Score              nullable
+        datetime2 EndTime            "nullable"
+        int       TimeSeconds        "nullable, CHECK ge 0"
+        int       HintsUsed          "CHECK ge 0"
+        int       Score              "nullable, CHECK ge 0"
         bit       IsCompleted
         bit       IsPaused
-        datetime2 PausedAt           nullable
-        int       TotalPausedSeconds
+        datetime2 PausedAt           "nullable"
+        int       TotalPausedSeconds "CHECK ge 0"
     }
     GameCell {
-        int     GameId    PK,FK
-        tinyint RowIdx    PK
-        tinyint ColIdx    PK
-        tinyint CellValue nullable
+        int     GameId    PK
+        tinyint RowIdx    PK "0..8"
+        tinyint ColIdx    PK "0..8"
+        tinyint CellValue "nullable, CHECK 1..9 or NULL"
     }
     PencilMark {
-        int     GameId    PK,FK
-        tinyint RowIdx    PK
-        tinyint ColIdx    PK
-        tinyint MarkValue PK
+        int     GameId    PK
+        tinyint RowIdx    PK "0..8"
+        tinyint ColIdx    PK "0..8"
+        tinyint MarkValue PK "CHECK 1..9"
     }
     HintLog {
         int       Id       PK
         int       GameId   FK
-        tinyint   RowIdx
-        tinyint   ColIdx
+        tinyint   RowIdx   "0..8"
+        tinyint   ColIdx   "0..8"
         datetime2 HintAt
     }
 ```

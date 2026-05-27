@@ -16,7 +16,7 @@ Randbedingungen sind **nicht-verhandelbare** Vorgaben, die das Design und die Im
 | **Runtime / Framework** | **.NET 10** | Wettbewerbs-Stack-Festlegung Tim Fischer. Dokumentiert in **Use-Cases-Dokument** (Stack-Header). |
 | **UI-Technologie** | **Blazor Server** | Server-Side Rendering mit SignalR-Circuit; spec-konform für interaktive Web-Anwendung lt. README §1.1 (Designfreiheit). |
 | **Datenbank** | **MS-SQL Server Express** | README §1.3 erlaubt "MySQL or MS-SQL server running on your machine." Entscheidung: MS-SQL Express. DB-Name strikt: **`sudoku`** (README §1.3: "create a database named **'sudoku'**"). |
-| **ORM / Data-Access** | Entity Framework Core 10 (oder Dapper) | Wahl noch offen; siehe **ER-Modell**. Beeinflusst Service-Interfaces nicht. |
+| **ORM / Data-Access** | **Entity Framework Core 10** | Entschieden (siehe [ADR-001](#chapter-9)). `SudokuDbContext` + EF-Migrations; das Submission-Skript **Datenbank-Skript** wird per `dotnet ef migrations script` aus den Migrations exportiert. |
 | **Authentication** | ASP.NET Core Identity (Cookie-basiert) | Aus README §2.1 UC2 ("a login **is required**") abgeleitet; siehe **V03** + **V16**. |
 
 ### Test-Frameworks
@@ -66,7 +66,7 @@ Die Wahl ist intern; das Build- und Test-Setup muss in **allen drei** funktionie
 
 | Termin | Pflicht (wörtliches Zitat) |
 |--------|----------------------------|
-| **11:30 Uhr** (Wettbewerbstag) | "submission of the planned test cases **must take place by 12 o'clock**" (README §1.4 + §3.1). |
+| **12:00 Uhr** (Wettbewerbstag) | "submission of the planned test cases **must take place by 12 o'clock**" (README §1.4 + §3.1). |
 | **Ende Wettbewerbstag** | Komplette Submission (ZIP) gemäss README §1.4. |
 
 ### Deliverables (README §1.4, wörtlich)
