@@ -1,7 +1,7 @@
-# 7 Verteilungssicht
+<h1 id="chapter-7">7 Verteilungssicht</h1>
 
 > arc42 v8.2 · Skills Battle 2026 — Application Development — Killer Sudoku
-> Quelldokument (autoritativ): [`skillsbattle2026_1.1.md`](../../skillsbattle2026_1.1.md)
+> Quelldokument (autoritativ): **Aufgabenstellung**
 
 Dieses Kapitel beschreibt die physische Verteilung der Anwendung. Da die Aufgabenstellung explizit ein lokales Setup vorsieht (README §1.3: "create a database named 'sudoku' on MySQL or MS-SQL server **running on your machine**"), ist die Verteilungssicht bewusst einfach gehalten: Alle Komponenten laufen auf demselben Entwickler-Laptop.
 
@@ -13,34 +13,34 @@ Die folgende Verteilungssicht zeigt die Laufzeit-Knoten der Anwendung beim Wettb
 
 ```mermaid
 flowchart LR
-    subgraph Laptop["Entwickler-Laptop (Host)"]
-        direction TB
+ subgraph Laptop["Entwickler-Laptop (Host)"]
+ direction TB
 
-        subgraph Browser["Webbrowser"]
-            UI["Blazor Server UI<br/>(SignalR-Client)<br/>Chrome / Firefox"]
-        end
+ subgraph Browser["Webbrowser"]
+ UI["Blazor Server UI<br/>(SignalR-Client)<br/>Chrome / Firefox"]
+ end
 
-        subgraph App["Blazor Server App"]
-            Kestrel["Kestrel Web Server<br/>localhost:5001 (HTTPS)"]
-            Components["Razor Components<br/>(Server-Side Rendering)"]
-            Services["Service-Layer<br/>IAuthService, IPuzzleService,<br/>IGameService, IHintService,<br/>ISolverService, IHighscoreService"]
-            EF["EF Core 10<br/>SudokuDbContext"]
-            Kestrel --> Components
-            Components --> Services
-            Services --> EF
-        end
+ subgraph App["Blazor Server App"]
+ Kestrel["Kestrel Web Server<br/>localhost:5001 (HTTPS)"]
+ Components["Razor Components<br/>(Server-Side Rendering)"]
+ Services["Service-Layer<br/>IAuthService, IPuzzleService,<br/>IGameService, IHintService,<br/>ISolverService, IHighscoreService"]
+ EF["EF Core 10<br/>SudokuDbContext"]
+ Kestrel --> Components
+ Components --> Services
+ Services --> EF
+ end
 
-        subgraph DB["MS-SQL Server Express"]
-            Engine["SQL Engine<br/>localhost:1433"]
-            SudokuDB[("Database: sudoku<br/>AppUser, Puzzle, Cage,<br/>CageCell, Game, GameCell,<br/>PencilMark, HintLog,<br/>vw_Highscore")]
-            Engine --> SudokuDB
-        end
+ subgraph DB["MS-SQL Server Express"]
+ Engine["SQL Engine<br/>localhost:1433"]
+ SudokuDB[("Database: sudoku<br/>AppUser, Puzzle, Cage,<br/>CageCell, Game, GameCell,<br/>PencilMark, HintLog,<br/>vw_Highscore")]
+ Engine --> SudokuDB
+ end
 
-        UI -->|"HTTPS + SignalR<br/>(WebSocket)"| Kestrel
-        EF -->|"TDS (TCP 1433)<br/>Trusted_Connection"| Engine
-    end
+ UI -->|"HTTPS + SignalR<br/>(WebSocket)"| Kestrel
+ EF -->|"TDS (TCP 1433)<br/>Trusted_Connection"| Engine
+ end
 
-    Dev["Entwickler<br/>(Tim Fischer)"] -->|"Tastatur / Maus"| Browser
+ Dev["Entwickler<br/>(Tim Fischer)"] -->|"Tastatur / Maus"| Browser
 ```
 
 ### Knoten-Inventar
@@ -49,20 +49,20 @@ flowchart LR
 |--------|-----|----------------|-------------|--------|
 | Entwickler-Laptop | Hardware-Host | localhost | macOS / Windows | README §1.3 ("on your machine") |
 | Webbrowser | Client-Runtime | — | Chrome oder Firefox (modern HTML5) | Mockup-Briefs (Web-UI) |
-| Blazor Server App | Anwendungs-Server | `localhost:5001` (HTTPS) | .NET 10, Kestrel, Blazor Server (SignalR) | [erm.md](../erm.md), [functionality.md](../functionality.md) |
-| MS-SQL Server Express | DB-Server | `localhost:1433` | MS-SQL Express, Datenbank `sudoku` | README §1.3 ("MS-SQL server"), [`sudoku.sql`](../../db/sudoku.sql) |
+| Blazor Server App | Anwendungs-Server | `localhost:5001` (HTTPS) | .NET 10, Kestrel, Blazor Server (SignalR) | **ER-Modell**, **Funktionalitäts-Matrix** |
+| MS-SQL Server Express | DB-Server | `localhost:1433` | MS-SQL Express, Datenbank `sudoku` | README §1.3 ("MS-SQL server"), **Datenbank-Skript** |
 
 ### Kommunikationspfade
 
 | Von | Zu | Protokoll | Bemerkung |
 |-----|----|-----------|-----------|
-| Browser | Blazor Server App | HTTPS + WebSocket (SignalR) | Blazor Server hält permanente SignalR-Verbindung pro Tab/Circuit (siehe [functionality.md](../functionality.md#stack-konventionen)) |
+| Browser | Blazor Server App | HTTPS + WebSocket (SignalR) | Blazor Server hält permanente SignalR-Verbindung pro Tab/Circuit (siehe **Funktionalitäts-Matrix**) |
 | Blazor Server App | MS-SQL Express | TDS (TCP 1433) | EF Core via `SqlConnection`, Trusted_Connection (Windows-Auth) bzw. lokaler Service-Account |
 
 ### Bemerkungen
 
 - Es gibt **keine** Cloud-Komponenten, kein CDN, keine externen APIs — die Aufgabenstellung sieht ein rein lokales Setup vor.
-- Die SignalR-Verbindung ist Folge des Blazor-Server-Modells (siehe [ADR-001](./09-decisions.md#adr-001--stack-net-10--blazor-server--ms-sql-server)).
+- Die SignalR-Verbindung ist Folge des Blazor-Server-Modells (siehe [ADR-001](#chapter-9)).
 - Single-Host-Setup bedeutet: kein Reverse-Proxy, keine Lastverteilung, keine separate Auth-Komponente.
 
 ---
@@ -73,9 +73,9 @@ flowchart LR
 
 | Komponente | Version | Zweck | Quelle |
 |------------|---------|-------|--------|
-| .NET SDK | 10.x | Build & Run der Blazor-Server-App | Stack-Definition [erm.md](../erm.md), [functionality.md](../functionality.md) |
+| .NET SDK | 10.x | Build & Run der Blazor-Server-App | Stack-Definition **ER-Modell**, **Funktionalitäts-Matrix** |
 | MS-SQL Server Express | aktuelle Version | Datenbank-Engine für `sudoku`-DB | README §1.3 ("MS-SQL server") |
-| SQL Server Management Studio (SSMS) | beliebig | Ausführen von `sudoku.sql` (Schema-Setup), Tabellen-Inspektion | Operative Empfehlung |
+| SQL Server Management Studio (SSMS) | beliebig | Ausführen von **Datenbank-Skript** (Schema-Setup), Tabellen-Inspektion | Operative Empfehlung |
 | Visual Studio 2026 oder Visual Studio Code | beliebig | Entwicklungs-IDE | Empfehlung Entwickler-Werkzeug |
 | Webbrowser | Chrome oder Firefox (modern) | Frontend-Runtime | Standard Blazor-Server-Anforderung |
 
@@ -102,7 +102,7 @@ Die Datenbank-Erstellung erfolgt einmalig via SSMS oder `sqlcmd`:
 sqlcmd -S "(local)\SQLEXPRESS" -E -i db/sudoku.sql
 ```
 
-Das Skript [`db/sudoku.sql`](../../db/sudoku.sql) ist **idempotent**: Es prüft auf `DB_ID('sudoku')` und droppt bestehende Objekte in Reverse-FK-Reihenfolge, bevor neu angelegt wird. Damit ist ein wiederholtes Ausführen ohne Konflikte möglich.
+Das Skript **Datenbank-Skript** ist **idempotent**: Es prüft auf `DB_ID('sudoku')` und droppt bestehende Objekte in Reverse-FK-Reihenfolge, bevor neu angelegt wird. Damit ist ein wiederholtes Ausführen ohne Konflikte möglich.
 
 ---
 
@@ -132,7 +132,7 @@ Server=(local)\SQLEXPRESS;Database=sudoku;Trusted_Connection=True;TrustServerCer
 
 Der Connection-String wird via `appsettings.json` / `appsettings.Development.json` oder Umgebungsvariable konfiguriert. Trusted Connection (Windows-Auth) ist auf dem Wettbewerbs-Laptop ausreichend; Cross-Plattform-Setups (macOS) verwenden Username/Password über `User Id=... ;Password=...`.
 
-> **Sicherheit:** Auch im lokalen Setup wird der Connection-String nicht in den Source-Code hardkodiert (siehe [Kapitel 8 §8.4 Logging](./08-cross-cutting.md#84-logging) und [V03](../validation.md#v03--passwort-uc02-uc03)). `TrustServerCertificate=True` ist akzeptabel, da kein Netzwerk-Hop über das lokale Setup hinaus stattfindet.
+> **Sicherheit:** Auch im lokalen Setup wird der Connection-String nicht in den Source-Code hardkodiert (siehe [Kapitel 8 §8.4 Logging](#chapter-8) und **V03**). `TrustServerCertificate=True` ist akzeptabel, da kein Netzwerk-Hop über das lokale Setup hinaus stattfindet.
 
 ### Tests ausführen
 
@@ -140,10 +140,10 @@ Der Connection-String wird via `appsettings.json` / `appsettings.Development.jso
 dotnet test
 ```
 
-Test-Frameworks gemäss [ADR-011](./09-decisions.md#adr-011--test-pyramide-xunit--bunit--webapplicationfactory--playwright-net):
+Test-Frameworks gemäss [ADR-011](#chapter-9):
 
 - Unit-Tests (xUnit) — Solver-Logik, Service-Methoden, Validation
-- Component-Tests (bUnit) — Razor-Components ([siehe functionality.md](../functionality.md))
+- Component-Tests (bUnit) — Razor-Components (**Funktionalitäts-Matrix**)
 - Integration-Tests (xUnit + `WebApplicationFactory`) — DB + Auth + Service-End-to-End
 - E2E-Tests (Playwright .NET) — Kritische User-Flows (UC01, UC03, UC06, UC09)
 
@@ -161,20 +161,20 @@ Daraus leitet sich folgende Submission-Struktur ab:
 ```
 AppDev_Fischer_Tim.zip
 ├── doc/
-│   ├── arc42.pdf                (Kapitel 01–12 als ein PDF)
-│   ├── mockups/                 (PNG-Exports aus Figma)
-│   └── test-protocol.pdf
-├── src/                         (vollständiger .NET-Source)
-│   ├── Sudoku.Web/              (Blazor Server App)
-│   ├── Sudoku.Domain/           (Solver, Domain-Modelle)
-│   ├── Sudoku.Data/             (EF Core, Repositories)
-│   ├── Sudoku.Tests.Unit/
-│   ├── Sudoku.Tests.Integration/
-│   └── Sudoku.Tests.E2E/
+│ ├── arc42.pdf (Kapitel 01–12 als ein PDF)
+│ ├── mockups/ (PNG-Exports aus Figma)
+│ └── test-protocol.pdf
+├── src/ (vollständiger .NET-Source)
+│ ├── Sudoku.Web/ (Blazor Server App)
+│ ├── Sudoku.Domain/ (Solver, Domain-Modelle)
+│ ├── Sudoku.Data/ (EF Core, Repositories)
+│ ├── Sudoku.Tests.Unit/
+│ ├── Sudoku.Tests.Integration/
+│ └── Sudoku.Tests.E2E/
 ├── bin/
-│   └── Release/net10.0/         (Build-Output, ausführbare Files)
+│ └── Release/net10.0/ (Build-Output, ausführbare Files)
 └── db/
-    └── sudoku.sql               (DB-Script)
+ └── sudoku.sql (DB-Script)
 ```
 
 ### Build-Output (Executables)
@@ -202,16 +202,16 @@ dotnet Sudoku.Web.dll
 
 ### Datenbank-Script
 
-`db/sudoku.sql` (siehe [`sudoku.sql`](../../db/sudoku.sql)) ist im ZIP enthalten und entspricht README §1.3:
-> "Create for each table a SQL statement and save them in a script called `sudoku.sql`. Don't forget to create the primary and foreign key constraints."
+`db/sudoku.sql` (siehe **Datenbank-Skript**) ist im ZIP enthalten und entspricht README §1.3:
+> "Create for each table a SQL statement and save them in a script called **Datenbank-Skript**. Don't forget to create the primary and foreign key constraints."
 
 Das Skript erstellt:
 
 - Datenbank `sudoku` (idempotent)
 - Tabellen `AppUser`, `Puzzle`, `Cage`, `CageCell`, `Game`, `GameCell`, `PencilMark`, `HintLog`
 - PK/FK/CHECK/UNIQUE-Constraints
-- Trigger `trg_CageCell_UniquePerPuzzle` (siehe [ADR-004](./09-decisions.md#adr-004--cell-uniqueness-per-puzzle-via-trigger))
-- View `vw_Highscore` (siehe [ADR-003](./09-decisions.md#adr-003--highscore-als-view-statt-tabelle))
+- Trigger `trg_CageCell_UniquePerPuzzle` (siehe [ADR-004](#chapter-9))
+- View `vw_Highscore` (siehe [ADR-003](#chapter-9))
 
 ### Dokumentation
 
@@ -219,18 +219,18 @@ README §2.6 fordert wörtlich folgende Dokumentations-Sektionen:
 
 | README-Anforderung | Abgedeckt in |
 |--------------------|--------------|
-| "Mockup" | [`mockup-briefs.md`](../mockup-briefs.md) + [`mockups/`](../mockups/) |
-| "Database diagram" | [`erm.md`](../erm.md) (Mermaid ERD) + Kapitel 5 Bausteinsicht |
-| "Class diagram" | Kapitel 5 Bausteinsicht — Service-Interfaces aus [`functionality.md`](../functionality.md) |
-| "Additionally chosen use cases" | [`use-cases.md`](../use-cases.md) UC12–UC14 + [ADR-014](./09-decisions.md#adr-014--auswahl-der-3-zusätzlichen-use-cases) |
-| "Validation rules" | [`validation.md`](../validation.md) (V01–V16) |
-| "Test protocol" | [`test-protocol.md`](../test-protocol.md) + [`test-protocol.csv`](../test-protocol.csv) |
+| "Mockup" | **Mockup-Briefings** + **Mockup-Verzeichnis** |
+| "Database diagram" | **ER-Modell** (Mermaid ERD) + Kapitel 5 Bausteinsicht |
+| "Class diagram" | Kapitel 5 Bausteinsicht — Service-Interfaces aus **Funktionalitäts-Matrix** |
+| "Additionally chosen use cases" | **Use-Cases-Dokument** UC12–UC14 + [ADR-014](#chapter-9) |
+| "Validation rules" | **Validation-Regeln** (V01–V16) |
+| "Test protocol" | **Test-Protokoll** + **Test-Protokoll** |
 
 README §2.6 weiter: "For the delivery, create a PDF document." Die arc42-Kapitel werden zu einem PDF zusammengeführt (Submission-Format).
 
 ### Termin-Constraints
 
-README §1.4: "Note that the submission of the planned test cases must take place **by 11:30 o'clock**." Der Test-Plan ist in [`test-protocol.md`](../test-protocol.md) dokumentiert und wird vor 11:30:00 abgegeben (siehe Qualitätsziel Q3 in [Kapitel 1 §1.2](./01-introduction.md#12-qualitätsziele)).
+README §1.4: "Note that the submission of the planned test cases must take place **by 11:30 o'clock**." Der Test-Plan ist in **Test-Protokoll** dokumentiert und wird vor 11:30:00 abgegeben (siehe Qualitätsziel Q3 in [Kapitel 1 §1.2](#chapter-1)).
 
 ---
 
@@ -238,33 +238,33 @@ README §1.4: "Note that the submission of the planned test cases must take plac
 
 Zusätzlich zur nativen Variante (§7.1–§7.3) wird ein **containerisiertes Single-Image-Deployment** ausgeliefert. Es enthält Webserver, App und Datenbank in einem Image — der Prüfer kann mit einem einzigen `docker run` die gesamte Anwendung starten, ohne MS-SQL Server lokal installieren zu müssen.
 
-Siehe [ADR-015](./09-decisions.md#adr-015--single-image-container-für-prüferbequemlichkeit) für die Begründung der Single-Image-Wahl (statt klassischem Multi-Service-Compose).
+Siehe [ADR-015](#chapter-9) für die Begründung der Single-Image-Wahl (statt klassischem Multi-Service-Compose).
 
 ### Deployment-Diagramm (Container)
 
 ```mermaid
 flowchart LR
-    subgraph Host["Prüfer-Host (beliebig — Docker erforderlich)"]
-        direction TB
-        Browser["Webbrowser<br/>Chrome / Firefox"]
+ subgraph Host["Prüfer-Host (beliebig — Docker erforderlich)"]
+ direction TB
+ Browser["Webbrowser<br/>Chrome / Firefox"]
 
-        subgraph Container["killersudoku Container (ghcr.io)"]
-            direction TB
-            Entry["docker-entrypoint.sh<br/>(supervisor)"]
-            App["Kestrel + Blazor<br/>:8080 (HTTP)"]
-            SQL["sqlservr<br/>localhost:1433"]
-            Schema["sudoku.sql<br/>(idempotenter First-Run-Apply)"]
-            Vol[("Volume:<br/>/var/opt/mssql<br/>(Daten + Marker)")]
-            Entry --> SQL
-            Entry --> App
-            Entry --> Schema
-            Schema -. "first run" .-> SQL
-            App -. "TDS localhost:1433" .-> SQL
-            SQL --> Vol
-        end
+ subgraph Container["killersudoku Container (ghcr.io)"]
+ direction TB
+ Entry["docker-entrypoint.sh<br/>(supervisor)"]
+ App["Kestrel + Blazor<br/>:8080 (HTTP)"]
+ SQL["sqlservr<br/>localhost:1433"]
+ Schema["sudoku.sql<br/>(idempotenter First-Run-Apply)"]
+ Vol[("Volume:<br/>/var/opt/mssql<br/>(Daten + Marker)")]
+ Entry --> SQL
+ Entry --> App
+ Entry --> Schema
+ Schema -. "first run" .-> SQL
+ App -. "TDS localhost:1433" .-> SQL
+ SQL --> Vol
+ end
 
-        Browser -->|"HTTP :8080"| App
-    end
+ Browser -->|"HTTP :8080"| App
+ end
 ```
 
 ### Image-Inhalt
@@ -284,7 +284,7 @@ flowchart LR
 
 1. `sqlservr` als Background-Prozess starten
 2. Bis zu 60× `sqlcmd -Q "SELECT 1"`-Ping (≤ 2 Min) — wartet auf DB-Readiness
-3. Falls Marker-File `/var/opt/mssql/.killersudoku-schema-applied` **nicht** existiert: `sudoku.sql` ausführen und Marker setzen
+3. Falls Marker-File `/var/opt/mssql/.killersudoku-schema-applied` **nicht** existiert: **Datenbank-Skript** ausführen und Marker setzen
 4. `dotnet KillerSudoku.Web.dll` als zweiter Hintergrund-Prozess starten
 5. `wait -n` blockiert bis SQL oder App terminiert → dann sauberer SIGTERM an beide Children
 
@@ -295,11 +295,11 @@ flowchart LR
 ```bash
 docker pull ghcr.io/tim-fischer-zh/killer-sudoku:latest
 docker run -d \
-  --name killersudoku \
-  -p 8080:8080 \
-  -e MSSQL_SA_PASSWORD='Sudoku!Strong#Pass#2026' \
-  -v killersudoku-data:/var/opt/mssql \
-  ghcr.io/tim-fischer-zh/killer-sudoku:latest
+ --name killersudoku \
+ -p 8080:8080 \
+ -e MSSQL_SA_PASSWORD='Sudoku!Strong#Pass#2026' \
+ -v killersudoku-data:/var/opt/mssql \
+ ghcr.io/tim-fischer-zh/killer-sudoku:latest
 
 # Browser → http://localhost:8080
 ```
@@ -310,8 +310,8 @@ docker run -d \
 # Repo-Root als Build-Context (enthält source/ + db/ + docker-entrypoint.sh)
 docker build -t killersudoku:local .
 docker run -d -p 8080:8080 \
-  -e MSSQL_SA_PASSWORD='Sudoku!Strong#Pass#2026' \
-  killersudoku:local
+ -e MSSQL_SA_PASSWORD='Sudoku!Strong#Pass#2026' \
+ killersudoku:local
 ```
 
 #### Option C — `docker compose` (empfohlen)
@@ -320,7 +320,7 @@ docker run -d -p 8080:8080 \
 docker compose up --build
 ```
 
-Compose-Datei: [`docker-compose.yml`](../../docker-compose.yml) — bindet Port 8080 (App) und 1433 (DB, optional für externe SSMS-Inspektion), persistiert SQL-Daten in einem Named Volume.
+Compose-Datei: **docker-compose.yml** — bindet Port 8080 (App) und 1433 (DB, optional für externe SSMS-Inspektion), persistiert SQL-Daten in einem Named Volume.
 
 ### Ports
 
@@ -329,7 +329,7 @@ Compose-Datei: [`docker-compose.yml`](../../docker-compose.yml) — bindet Port 
 | `8080` | Kestrel HTTP (Blazor Server) | `-p 8080:8080` |
 | `1433` | MS-SQL (intern + optional extern für SSMS) | `-p 1433:1433` (kann weggelassen werden) |
 
-> **Hinweis:** Im Container läuft Kestrel auf HTTP (`:8080`), nicht HTTPS. Ein TLS-Terminator (z.B. Traefik/Caddy) ist nicht im Image enthalten — für die Submission-Bewertung ist Localhost-HTTP ausreichend. Die Auth-Cookies bleiben `HttpOnly + SameSite=Lax` (siehe [V03](../validation.md#v03--passwort-uc02-uc03)) — der `Secure`-Flag ist im Container-Lauf nur unter HTTPS-Reverse-Proxy zu setzen.
+> **Hinweis:** Im Container läuft Kestrel auf HTTP (`:8080`), nicht HTTPS. Ein TLS-Terminator (z.B. Traefik/Caddy) ist nicht im Image enthalten — für die Submission-Bewertung ist Localhost-HTTP ausreichend. Die Auth-Cookies bleiben `HttpOnly + SameSite=Lax` (siehe **V03**) — der `Secure`-Flag ist im Container-Lauf nur unter HTTPS-Reverse-Proxy zu setzen.
 
 ### Environment-Variablen
 
@@ -347,7 +347,7 @@ Die DB-Files (`mdf` / `ldf`) liegen in `/var/opt/mssql` im Container. Ein Named-
 
 ### CI / Registry-Push
 
-Die GitHub-Actions-Pipeline [`.github/workflows/docker.yml`](../../.github/workflows/docker.yml) baut bei jedem `push` auf `main` das Image und pusht es nach `ghcr.io/tim-fischer-zh/killer-sudoku` mit Tags:
+Die GitHub-Actions-Pipeline **.github/workflows/docker.yml** baut bei jedem `push` auf `main` das Image und pusht es nach `ghcr.io/tim-fischer-zh/killer-sudoku` mit Tags:
 
 - `:latest` (auf default-Branch)
 - `:sha-<git-short-sha>` (immutable per Commit)
@@ -371,10 +371,10 @@ Der Prüfer kann damit zwischen den drei Optionen (Pull / Local-Build / Compose)
 
 ## Verweise
 
-- [Kapitel 2 — Randbedingungen](./02-constraints.md)
-- [Kapitel 5 — Bausteinsicht](./05-building-blocks.md)
-- [Kapitel 8 — Querschnittliche Konzepte](./08-cross-cutting.md)
-- [Kapitel 9 — Architekturentscheidungen](./09-decisions.md)
-- [`functionality.md`](../functionality.md) — Service-Layer-Inventar
-- [`sudoku.sql`](../../db/sudoku.sql) — DB-Schema
-- [`skillsbattle2026_1.1.md`](../../skillsbattle2026_1.1.md) — Aufgabenstellung
+- [Kapitel 2 — Randbedingungen](#chapter-2)
+- [Kapitel 5 — Bausteinsicht](#chapter-5)
+- [Kapitel 8 — Querschnittliche Konzepte](#chapter-8)
+- [Kapitel 9 — Architekturentscheidungen](#chapter-9)
+- **Funktionalitäts-Matrix** — Service-Layer-Inventar
+- **Datenbank-Skript** — DB-Schema
+- **Aufgabenstellung** — Aufgabenstellung

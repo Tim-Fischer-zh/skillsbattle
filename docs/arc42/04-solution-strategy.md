@@ -114,7 +114,7 @@ flowchart LR
     A[Spec lesen<br/>README §1-3] --> B[Use-Cases<br/>+ AC formulieren]
     B --> C[Validation-Regeln<br/>V01-V16]
     C --> D[Test-Cases<br/>planen]
-    D -->|12:00 Submission| E[(Test-Protokoll<br/>geliefert)]
+    D -->|11:30 Submission| E[(Test-Protokoll<br/>geliefert)]
     D --> F[Mockups<br/>+ ERM + SQL]
     F --> G[Architektur<br/>arc42 Kapitel 1-12]
     G --> H[Implementation<br/>TDD: Red-Green-Refactor]

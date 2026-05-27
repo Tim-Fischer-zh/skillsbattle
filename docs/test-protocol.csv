@@ -32,6 +32,7 @@ UC05;T041;Negative: Multi-Solution → reject;I;xUnit + WAF;—;SaveIfSolvableAs
 UC05;T042;Negative: Unsolvable → reject;I;xUnit + WAF;—;SaveIfSolvableAsync(impossible);Cage-Sum kann nicht erreicht werden;Result=Unsolvable, KEINE Row in Puzzle;P1
 UC05;T043;Rollback: Bei Fehler keine Teil-Daten in DB;I;xUnit + WAF;—;Inject failure mid-save;—;Keine Cage-Rows ohne Puzzle-Row;P2
 UC05;T044;Performance Boundary: Solver < 2 Sekunden;U;xUnit;—;"Stopwatch.Start; Solver.Solve(hardCase); Stop";Schwerstes Beispiel;Elapsed < 2000 ms;P3
+UC05;T045;AC05.4 — Cage-Sum-Pre-Fail (Σ ≠ 405) → Reject ohne Solver-Call;I;xUnit + WAF;—;SaveIfSolvableAsync mit Cages deren Σ=400;27 Cages, Σ = 400 (1 fehlend);"Result=InvalidStructure (""Σ ≠ 405""), Solver-Mock 0× aufgerufen";P1
 UC06;T050;Positive: User startet Game;I;xUnit + WAF;Puzzle existiert;StartGameAsync(userId, puzzleId);—;Row in Game mit StartTime, HintsUsed=0;P1
 UC06;T051;Negative: CellValue=0 → reject;U;xUnit;—;Service.SetCellValueAsync(g, 0, 0, 0);—;ArgumentException ODER ValidationError;P2
 UC06;T052;Boundary: CellValue 1/9 OK, 10 Fehler;I;xUnit + WAF;Game läuft;SetCellValueAsync 1/9/10;—;1+9 persistiert, 10 reject;P3
@@ -41,6 +42,7 @@ UC07;T061;Side-Effect: HintsUsed wird inkrementiert;I;xUnit + WAF;Game mit Hints
 UC07;T062;Side-Effect: HintLog-Eintrag wird erstellt;I;xUnit + WAF;Game mit 0 HintLogs;GetHintAsync → COUNT HintLog;—;COUNT = 1;P2
 UC07;T063;Negative: Hint bei vollem Grid → Fehler;I;xUnit + WAF;Game mit 81 Cells gefüllt;GetHintAsync;—;InvalidOperationException ODER Failure-Result;P2
 UC07;T064;Hint überschreibt falschen Wert nicht (oder zeigt falsche Zelle);U;xUnit;Solver-Mock;HintLogic.PickCell(state with errors);—;Picked Cell ist entweder leere ODER falsche Zelle (dokumentiert);P3
+UC07;T065;Boundary: Hint bei genau 80/81 gefüllten Zellen (letzte freie);I;xUnit + WAF;Game mit 80/81 GameCells, 1 Zelle leer;GetHintAsync(gameId);—;HintResult füllt exakt die letzte freie Zelle, HintsUsed +=1;P3
 UC08;T070;Positive: Score-Formel korrekt;U;xUnit;—;ScoreCalculator.Calculate(time=300, hints=2);—;Score = 10000 - 300 - 2*300 = 9100;P1
 UC08;T071;Boundary: Score-Floor bei 0;U;xUnit;—;Calculator(time=15000, hints=10);—;Score = 0 (nicht negativ);P3
 UC08;T072;Sortierung absteigend nach Score;I;xUnit + WAF;3 completed Games mit Scores 5000/8000/3000;GetTopAsync(10);—;Reihenfolge: 8000, 5000, 3000;P2
@@ -59,6 +61,7 @@ UC10;T090;Positive: Game wird mit Score+EndTime gespeichert;I;xUnit + WAF;UC09 r
 UC10;T091;TimeSeconds = (EndTime - StartTime) - TotalPausedSeconds;U;xUnit;—;Calculator(start=t0, end=t0+600, paused=120);—;TimeSeconds = 480;P2
 UC10;T092;Negative: IsCompleted bleibt 0 bei falscher Lösung;I;xUnit + WAF;UC09 returnt IsCorrect=false;CompleteGameAsync wird NICHT aufgerufen (Service-Order);—;Game.IsCompleted=0;P2
 UC10;T093;DB-Constraint: TimeSeconds < 0 wird abgelehnt;I;xUnit + WAF;—;Raw SQL UPDATE Game SET TimeSeconds=-1;—;SqlException;P3
+UC10;T094;Boundary: HintsUsed=0 → Score = 10000 − TimeSeconds (kein Hint-Penalty);U;xUnit;—;ScoreCalculator.Calculate(time=500, hints=0);—;Score = 9500;P3
 UC11;T100;Positive: Example-1 hat genau 1 Lösung;U;xUnit;—;Solver.Solve(example1);README example_1.png;Solutions=1, Solution=int[9,9];P1
 UC11;T101;Positive: Example-2 hat genau 1 Lösung;U;xUnit;—;Solver.Solve(example2);README example_2.png;Solutions=1;P1
 UC11;T102;Lösung erfüllt alle 4 Constraints (Row/Col/Nonet/Cage);U;xUnit;—;Solver.Solve + Validator.Check;—;Validator returns IsCorrect=true;P1
@@ -71,16 +74,20 @@ UC12;T111;Filter: Difficulty=2 zeigt nur Diff-2-Puzzles;I;xUnit + WAF;1×Diff1, 
 UC12;T112;Pagination: pageSize=2, page=2;I;xUnit + WAF;5 Puzzles;ListAsync(null, 2, 2);—;Items[2..3], Total=5;P2
 UC12;T113;Empty: keine Puzzles → leere Liste;I;xUnit + WAF;Empty DB;ListAsync(null, 1, 20);—;Items leer, Total=0;P2
 UC12;T114;E2E: Filter ändert URL + Liste;E;Playwright;4 Puzzles;"Klick ""Mittel"" → URL hat ?difficulty=2";—;Sichtbare Cards = 2;P2
+UC12;T115;Boundary: Page=0 → ergibt Empty oder 400 (kein Crash);I;xUnit + WAF;5 Puzzles;ListAsync(null, 0, 20);—;Result.Items leer ODER ArgumentException — kein Crash, kein 500;P3
 UC13;T120;Pause setzt IsPaused=1, PausedAt;I;xUnit + WAF;Game läuft;PauseAsync(gameId);—;Game.IsPaused=1, PausedAt≠NULL;P1
 UC13;T121;Resume erhöht TotalPausedSeconds;I;xUnit + WAF;Game pausiert seit 30s;ResumeAsync(gameId);—;TotalPausedSeconds += ~30;P1
 UC13;T122;Constraint: max 1 aktives Game pro User-Puzzle;I;xUnit + WAF;Active Game (user1, puzzle1);StartGameAsync(user1, puzzle1) erneut;—;Exception ODER returnt bestehendes GameId;P2
 UC13;T123;Resume restored alle GameCells;I;xUnit + WAF;Game mit 30 gefüllten Zellen, pausiert;ResumeAsync + GetState;—;State enthält 30 Cells unverändert;P2
 UC13;T124;E2E: Pause-Button → Overlay, Resume → editierbar;E;Playwright;Game läuft;Klick Pause, Klick Resume;—;Overlay erscheint+verschwindet;P3
+UC13;T125;Boundary: Mehrere Pause/Resume-Cycles → TotalPausedSeconds akkumuliert;I;xUnit + WAF;Game läuft;3× (Pause 10s → Resume) hintereinander;—;TotalPausedSeconds ≈ 30 (±1 für jitter);P3
 UC14;T130;Toggle Mark: hinzufügen;I;xUnit + WAF;Game läuft, Cell (0,0) leer;TogglePencilMarkAsync(g, 0, 0, 5);—;INSERT in PencilMark;P1
 UC14;T131;Toggle Mark: entfernen wenn bereits gesetzt;I;xUnit + WAF;PencilMark (g, 0, 0, 5) existiert;TogglePencilMarkAsync(g, 0, 0, 5);—;DELETE in PencilMark;P2
 UC14;T132;Setzen finaler Wert löscht Pencil Marks;I;xUnit + WAF;(g, 0, 0) hat 3 Pencil Marks;SetCellValueAsync(g, 0, 0, 7);—;PencilMark-Rows für (0,0) = 0;P1
 UC14;T133;Pencil Marks beeinflussen Check NICHT;U;xUnit;—;Validator.Check(solution mit Pencil-Marks-Daten);—;IsCorrect basiert nur auf GameCell.CellValue;P3
 UC14;T134;UI: Pencil-Mode-Toggle ändert Component-State;C;bUnit;—;Klick Pencil-Toggle;—;Component-State: PencilMode=true;P2
+UC14;T135;Boundary: 9 Pencil-Marks (1–9) in einer Zelle gleichzeitig;I;xUnit + WAF;Game läuft, Cell (0,0) leer;9× TogglePencilMarkAsync(g, 0, 0, n) für n=1..9;—;"9 Rows in PencilMark für (0,0); kein Constraint-Fehler";P3
+UC14;T136;Negative: Pencil-Mark in Zelle mit finalem Wert → Reject;U;xUnit;GameCell (g, 0, 0).CellValue = 5;TogglePencilMarkAsync(g, 0, 0, 3);—;"InvalidOperationException oder Result.Failed (V13: ""Pencil Marks nur in leeren Zellen"")";P2
 Manual;M001;Visual: Cage-Borders sichtbar in Chrome;M;Excel-Steps;;1. Chrome öffnen. 2. /puzzles/1/play. 3. Cage-Borders prüfen.;;Gestrichelte Linien sichtbar;P2
 Manual;M002;Visual: Cage-Borders sichtbar in Firefox;M;Excel-Steps;;dito in Firefox;;gleich;P2
 Manual;M003;Tastatur-Navigation: Pfeiltasten + 1-9 + Delete;M;Excel-Steps;;Spielscreen, Pfeil + Zahl-Input;;Aktive Zelle wandert, Werte trag in;P2

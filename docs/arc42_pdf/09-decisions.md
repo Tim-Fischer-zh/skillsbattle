@@ -1,7 +1,7 @@
-# 9 Architekturentscheidungen (ADRs)
+<h1 id="chapter-9">9 Architekturentscheidungen (ADRs)</h1>
 
 > arc42 v8.2 · Skills Battle 2026 — Application Development — Killer Sudoku
-> Quelldokument (autoritativ): [`skillsbattle2026_1.1.md`](../../skillsbattle2026_1.1.md)
+> Quelldokument (autoritativ): **Aufgabenstellung**
 
 Dieses Kapitel dokumentiert die wesentlichen Architekturentscheidungen als ADRs (Architecture Decision Records). Jeder Eintrag folgt dem Format:
 
@@ -26,11 +26,11 @@ Stack: **.NET 10** (Blazor Server) als Anwendungs-Framework und **MS-SQL Server 
 **Konsequenz:**
 - (+) Strenges Typsystem (C# 13) reduziert Fehler bei Solver- und Domain-Logik
 - (+) Blazor Server: vollständiges C#-Stack (Frontend + Backend), keine Sprach-Wechsel zwischen Layern
-- (+) ASP.NET Core Identity bietet hardened-Auth out-of-the-box (siehe [§8.1](./08-cross-cutting.md#81-authentifizierung--autorisierung))
+- (+) ASP.NET Core Identity bietet hardened-Auth out-of-the-box (siehe [§8.1](#chapter-8))
 - (+) EF Core 10 + MS-SQL Express: konsistentes Tooling, Trusted Connection für lokales Setup
 - (+) bUnit-Component-Tests + xUnit Unit-Tests sind im selben Test-Projekt möglich
-- (−) Blazor Server benötigt permanente SignalR-Verbindung (siehe [§7.1](./07-deployment.md#71-deployment-diagramm)) — bei Disconnect Verlust des UI-State (mitigiert via Auto-Save in DB, [UC13](../use-cases.md#uc13--pause--resume-game))
-- (−) .NET-Setup auf Prüfer-Laptop muss vorhanden sein (Mitigation: Submission liefert Build-Output in `bin/Release/net10.0/`, siehe [§7.4](./07-deployment.md#74-submission-artefakte))
+- (−) Blazor Server benötigt permanente SignalR-Verbindung (siehe [§7.1](#chapter-7)) — bei Disconnect Verlust des UI-State (mitigiert via Auto-Save in DB, **UC13**)
+- (−) .NET-Setup auf Prüfer-Laptop muss vorhanden sein (Mitigation: Submission liefert Build-Output in `bin/Release/net10.0/`, siehe [§7.4](#chapter-7))
 
 ---
 
@@ -45,11 +45,11 @@ Ein Killer-Sudoku besteht aus Cages: Gruppen zusammenhängender Zellen mit einer
 2. **JSON in Puzzle** — Eine Spalte `CagesJson NVARCHAR(MAX)` mit Array von Cages
 
 **Entscheidung:**
-**Variante 1 (relational).** Siehe Schema in [`sudoku.sql`](../../db/sudoku.sql) (Zeilen 67–96).
+**Variante 1 (relational).** Siehe Schema in **Datenbank-Skript** (Zeilen 67–96).
 
 **Konsequenz:**
-- (+) FK-Integrität & DB-CHECK-Constraints (Sum ∈ [1, 45], Row/Col ∈ [0, 8]) — siehe [V06](../validation.md#v06--cage-struktur-uc04)
-- (+) Einfache SQL-Queries für Cage-Sum-Validation (UC09) — siehe Sample-Queries in [`erm.md`](../erm.md#sample-queries-für-solver--hint--validation)
+- (+) FK-Integrität & DB-CHECK-Constraints (Sum ∈ [1, 45], Row/Col ∈ [0, 8]) — siehe **V06**
+- (+) Einfache SQL-Queries für Cage-Sum-Validation (UC09) — siehe Sample-Queries in **ER-Modell**
 - (+) Indexierbarkeit (Index `IX_Cage_PuzzleId`)
 - (+) Trigger `trg_CageCell_UniquePerPuzzle` lässt sich nur in der relationalen Variante sinnvoll umsetzen
 - (−) Mehr Joins beim Lesen eines Puzzles (zwei Queries: Cages + CageCells, oder ein Join)
@@ -68,12 +68,12 @@ UC08 (Show High Score) zeigt die Top-N abgeschlossenen Games sortiert nach Score
 2. **View** `vw_Highscore` über `Game JOIN AppUser JOIN Puzzle`
 
 **Entscheidung:**
-**Variante 2 (View).** Siehe [`sudoku.sql`](../../db/sudoku.sql) Zeilen 214–232.
+**Variante 2 (View).** Siehe **Datenbank-Skript** Zeilen 214–232.
 
 **Konsequenz:**
 - (+) Single Source of Truth: kein Sync-Risiko zwischen `Game` und `Highscore`
 - (+) Automatisch konsistent bei UPDATE auf `Game`
-- (+) `WHERE g.IsCompleted = 1 AND g.Score IS NOT NULL` stellt sicher, dass nur abgeschlossene Spiele erscheinen — passt zu [UC10 AC10.3](../use-cases.md#uc10--save-result)
+- (+) `WHERE g.IsCompleted = 1 AND g.Score IS NOT NULL` stellt sicher, dass nur abgeschlossene Spiele erscheinen — passt zu UC10 AC10.3
 - (−) Performance: bei sehr vielen Games (>10⁶) wäre View langsamer als materialisierte Tabelle. Für die Wettbewerbs-Submission (lokales Setup, wenige Spiele) irrelevant.
 - (−) Pagination der View erfordert `OFFSET/FETCH` in jeder Abfrage statt vorberechneter Sortierung
 
@@ -84,7 +84,7 @@ UC08 (Show High Score) zeigt die Top-N abgeschlossenen Games sortiert nach Score
 **Status:** Akzeptiert
 
 **Kontext:**
-Die Regel "jede Zelle gehört zu **genau einem** Cage pro Puzzle" (siehe [UC04 AC04.2](../use-cases.md#uc04--enter-puzzle) und [V06](../validation.md#v06--cage-struktur-uc04)) lässt sich auf Datenbank-Ebene nicht direkt mit einer einzelnen UNIQUE-Constraint ausdrücken, weil `CageCell` kein direktes `PuzzleId`-Feld hat (PuzzleId steckt in `Cage`).
+Die Regel "jede Zelle gehört zu **genau einem** Cage pro Puzzle" (siehe UC04 AC04.2 und **V06**) lässt sich auf Datenbank-Ebene nicht direkt mit einer einzelnen UNIQUE-Constraint ausdrücken, weil `CageCell` kein direktes `PuzzleId`-Feld hat (PuzzleId steckt in `Cage`).
 
 Optionen:
 
@@ -93,7 +93,7 @@ Optionen:
 3. **Nur Application-Layer-Validierung** — kein DB-Schutz
 
 **Entscheidung:**
-**Variante 2 (Trigger).** Konkret `trg_CageCell_UniquePerPuzzle` (siehe [`sudoku.sql`](../../db/sudoku.sql) Zeilen 100–121):
+**Variante 2 (Trigger).** Konkret `trg_CageCell_UniquePerPuzzle` (siehe **Datenbank-Skript** Zeilen 100–121):
 
 ```sql
 CREATE OR ALTER TRIGGER trg_CageCell_UniquePerPuzzle
@@ -101,20 +101,20 @@ ON CageCell
 AFTER INSERT, UPDATE
 AS
 BEGIN
-    ...
-    IF EXISTS (
-        SELECT 1
-        FROM CageCell cc
-        JOIN Cage c1 ON c1.Id = cc.CageId
-        JOIN inserted i ON i.RowIdx = cc.RowIdx AND i.ColIdx = cc.ColIdx
-        JOIN Cage c2 ON c2.Id = i.CageId
-        WHERE c1.PuzzleId = c2.PuzzleId
-          AND cc.CageId <> i.CageId
-    )
-    BEGIN
-        ROLLBACK TRANSACTION;
-        THROW 50001, 'CageCell: Cell already assigned to another cage in the same puzzle.', 1;
-    END
+ ...
+ IF EXISTS (
+ SELECT 1
+ FROM CageCell cc
+ JOIN Cage c1 ON c1.Id = cc.CageId
+ JOIN inserted i ON i.RowIdx = cc.RowIdx AND i.ColIdx = cc.ColIdx
+ JOIN Cage c2 ON c2.Id = i.CageId
+ WHERE c1.PuzzleId = c2.PuzzleId
+ AND cc.CageId <> i.CageId
+ )
+ BEGIN
+ ROLLBACK TRANSACTION;
+ THROW 50001, 'CageCell: Cell already assigned to another cage in the same puzzle.', 1;
+ END
 END;
 ```
 
@@ -135,10 +135,10 @@ END;
 **Status:** Akzeptiert
 
 **Kontext:**
-Die Benutzer-Tabelle würde idiomatisch `User` heissen. In T-SQL ist `USER` jedoch ein reserviertes Keyword (für `USER_NAME()` etc.), was sowohl im Schema-Skript als auch in EF-LINQ-Queries ständige Eckige-Klammern-Quotation erfordern würde.
+Die Benutzer-Tabelle würde idiomatisch `User` heissen. In T-SQL ist `USER` jedoch ein reserviertes Keyword (für `USER_NAME` etc.), was sowohl im Schema-Skript als auch in EF-LINQ-Queries ständige Eckige-Klammern-Quotation erfordern würde.
 
 **Entscheidung:**
-Tabelle und C#-Entity heissen **`AppUser`**. Siehe [`erm.md`](../erm.md#design-entscheidungen) und [`sudoku.sql`](../../db/sudoku.sql) Zeilen 36–48.
+Tabelle und C#-Entity heissen **`AppUser`**. Siehe **ER-Modell** und **Datenbank-Skript** Zeilen 36–48.
 
 **Konsequenz:**
 - (+) Kein Quoting notwendig, klare Lesbarkeit in SQL und C#
@@ -152,10 +152,10 @@ Tabelle und C#-Entity heissen **`AppUser`**. Siehe [`erm.md`](../erm.md#design-e
 **Status:** Akzeptiert
 
 **Kontext:**
-Sudoku-Zellen werden durch Zeilen- und Spalten-Index identifiziert. Idiomatisch wären die Spalten-Namen `Row` und `Col`. T-SQL reserviert allerdings `ROW` (z.B. in `ROW_NUMBER()` und Table-Hints).
+Sudoku-Zellen werden durch Zeilen- und Spalten-Index identifiziert. Idiomatisch wären die Spalten-Namen `Row` und `Col`. T-SQL reserviert allerdings `ROW` (z.B. in `ROW_NUMBER` und Table-Hints).
 
 **Entscheidung:**
-Spalten heissen **`RowIdx`** und **`ColIdx`** (TINYINT, Range 0–8). Siehe [`erm.md`](../erm.md#design-entscheidungen) und [`sudoku.sql`](../../db/sudoku.sql).
+Spalten heissen **`RowIdx`** und **`ColIdx`** (TINYINT, Range 0–8). Siehe **ER-Modell** und **Datenbank-Skript**.
 
 **Konsequenz:**
 - (+) Kein Quoting in SQL
@@ -180,9 +180,9 @@ Die Tabelle `Puzzle` enthält **keine** Solution-Spalte. Lösungen werden bei je
 **Konsequenz:**
 - (+) Konform zur strikten README-Vorgabe — bestehensrelevant
 - (+) Single Source of Truth: Solver ist die Autorität, kein DB-Cache kann veralten
-- (+) Test: SQL-Query auf `INFORMATION_SCHEMA.COLUMNS` zeigt keine `Solution`-Spalte ([UC04 AC04.4](../use-cases.md#uc04--enter-puzzle))
+- (+) Test: SQL-Query auf `INFORMATION_SCHEMA.COLUMNS` zeigt keine `Solution`-Spalte (UC04 AC04.4)
 - (−) Solver wird mehrfach aufgerufen pro Game-Session (z.B. mehrere Hints) — mitigiert durch In-Memory-Cache pro Circuit, **niemals** persistent
-- Konsequenz aus Strict-Word-Audit S4 in [`use-cases.md`](../use-cases.md#strict-wort-audit-für-test-cases-bindung)
+- Konsequenz aus Strict-Word-Audit S4 in **Use-Cases-Dokument**
 
 ---
 
@@ -198,12 +198,12 @@ UC14 (Pencil Marks) erlaubt 0–9 Kandidaten-Markierungen pro Zelle. Modellierun
 3. **Bitmaske** in `GameCell` (z.B. `TINYINT PencilBitmask` — Bits 0–8 für Zahlen 1–9)
 
 **Entscheidung:**
-**Variante 1 (eigene Tabelle).** Siehe [`erm.md`](../erm.md#design-entscheidungen) und [`sudoku.sql`](../../db/sudoku.sql) Zeilen 180–192.
+**Variante 1 (eigene Tabelle).** Siehe **ER-Modell** und **Datenbank-Skript** Zeilen 180–192.
 
 **Konsequenz:**
 - (+) Konsistenz mit relationaler Cage-Modellierung (ADR-002)
 - (+) CHECK-Constraint `CK_PencilMark_Value` (Range 1–9) auf DB-Ebene
-- (+) Composite PK verhindert Duplikate (siehe [V13](../validation.md#v13--pencil-mark-uc14))
+- (+) Composite PK verhindert Duplikate (siehe **V13**)
 - (+) Indexier-/Query-bar (z.B. "alle Marks für GameId X")
 - (−) Mehr Rows in DB (worst case 81 × 9 = 729 Marks pro Game) — bei lokalem Setup unkritisch
 - (−) JSON wäre kompakter, aber kein Schutz vor Invariant-Verletzungen
@@ -233,12 +233,12 @@ Berechnung beim Game-Ende:
 TimeSeconds = DATEDIFF(SECOND, StartTime, EndTime) - TotalPausedSeconds
 ```
 
-Siehe [`sudoku.sql`](../../db/sudoku.sql) Zeilen 128–149 und [`erm.md`](../erm.md#design-entscheidungen).
+Siehe **Datenbank-Skript** Zeilen 128–149 und **ER-Modell**.
 
 **Konsequenz:**
 - (+) Einfach zu queryen, kein Aggregat über Sub-Tabelle nötig
 - (+) Audit-Spur durch `PausedAt` (letzter Pause-Beginn) — operative Sichtbarkeit
-- (+) Konsistenz-Check `CK_Game_TotalPaused CHECK (TotalPausedSeconds >= 0)` ([V12](../validation.md#v12--game-state-konsistenz-uc10-uc13))
+- (+) Konsistenz-Check `CK_Game_TotalPaused CHECK (TotalPausedSeconds >= 0)` (**V12**)
 - (−) Keine Historie aller Pause-Events (z.B. "wie oft wurde pausiert"). Aus README nicht gefordert.
 - (−) Resume-Logik muss atomic sein (read `PausedAt`, compute Δ, add to `TotalPausedSeconds`, set `IsPaused=0`, `PausedAt=NULL`) — wird via Service-Transaction abgesichert
 
@@ -249,7 +249,7 @@ Siehe [`sudoku.sql`](../../db/sudoku.sql) Zeilen 128–149 und [`erm.md`](../erm
 **Status:** Akzeptiert
 
 **Kontext:**
-Der Solver muss drei Fälle unterscheiden (siehe [V07](../validation.md#v07--puzzle-solvability-uc05)):
+Der Solver muss drei Fälle unterscheiden (siehe **V07**):
 
 - 0 Lösungen → "Puzzle ist nicht lösbar"
 - 1 Lösung → speichern (UC05) bzw. Hint geben (UC07)
@@ -266,13 +266,13 @@ public record SolveResult(int Solutions, int[,]? Solution);
 // 2 bedeutet: "mindestens 2 gefunden, weitere möglich"
 ```
 
-Siehe [UC11 Main Flow Schritt 5](../use-cases.md#uc11--auto-solve):
+Siehe UC11 Main Flow Schritt 5:
 > "Bei Solutions >= 2 → nicht eindeutig (Solver bricht nach 2. gefundener Lösung ab)"
 
 **Konsequenz:**
 - (+) Performance: Worst-Case bounded, keine Abbruch-Heuristik nötig
 - (+) Genügt für UC05-Entscheidung (Save ja/nein) und UC11-Aussage (Eindeutigkeit ja/nein)
-- (+) Boundary-Test: [UC11 AC11.2](../use-cases.md#uc11--auto-solve) "< 2 Sekunden"
+- (+) Boundary-Test: UC11 AC11.2 "< 2 Sekunden"
 - (−) Keine genaue Anzahl Lösungen bei ambiguous Puzzles — aber: nicht gefordert
 - (−) Hint-Algorithmus muss bei `Solutions != 1` graceful failen (Hint nur bei eindeutiger Lösung sinnvoll)
 
@@ -307,8 +307,8 @@ Test-Pyramide-Optionen für den .NET-Stack:
 - (+) Alle Layer als `dotnet test` aufrufbar — eine CI-Pipeline
 - (+) bUnit ist der De-facto-Standard für Blazor-Components (Microsoft-empfohlen)
 - (+) Playwright .NET liefert auch UI-Test-Recording (Trace-Files)
-- (+) Solver-Tests als reine Unit-Tests möglich, da Solver Pure Function ([§8.5](./08-cross-cutting.md#85-solver-domänen-konzept))
-- (−) Vier Frameworks im Stack — Lernkurve für Prüfer, der das Test-Protokoll liest. Mitigation: Test-Protokoll listet Framework pro Test-Case in der CSV ([`test-protocol.csv`](../test-protocol.csv)).
+- (+) Solver-Tests als reine Unit-Tests möglich, da Solver Pure Function ([§8.5](#chapter-8))
+- (−) Vier Frameworks im Stack — Lernkurve für Prüfer, der das Test-Protokoll liest. Mitigation: Test-Protokoll listet Framework pro Test-Case in der CSV (**Test-Protokoll**).
 - (−) Playwright benötigt Browser-Binary-Download beim ersten Run
 
 ---
@@ -333,7 +333,7 @@ Anforderungen an die Formel:
 Score = max(0, 10000 − TimeSeconds − HintsUsed × 300)
 ```
 
-Siehe [UC08 Score-Formel](../use-cases.md#uc08--show-high-score):
+Siehe UC08 Score-Formel:
 
 > - Begründung: Zeit-Penalty linear (1 Pkt/Sek); Hints kosten 5 Min Äquivalent
 > - Floor bei 0 → keine negativen Scores
@@ -341,9 +341,9 @@ Siehe [UC08 Score-Formel](../use-cases.md#uc08--show-high-score):
 **Konsequenz:**
 - (+) Einfach nachvollziehbar — Prüfer kann manuell prüfen
 - (+) 5-Min-Penalty pro Hint ist eine "schmerzhafte" aber nicht ruinöse Wertung
-- (+) `max(0, ...)` verhindert negative Scores → DB-Constraint `CK_Game_Score CHECK (Score >= 0)` erfüllt ([V12](../validation.md#v12--game-state-konsistenz-uc10-uc13))
+- (+) `max(0, ...)` verhindert negative Scores → DB-Constraint `CK_Game_Score CHECK (Score >= 0)` erfüllt (**V12**)
 - (−) Theoretisch könnte ein User in 9 999 Sekunden ohne Hints noch 1 Pkt erreichen — aber: nicht negativ, akzeptabel
-- Test-Anker: [AC08.1](../use-cases.md#uc08--show-high-score) (Score ganzzahlig nach Formel)
+- Test-Anker: **AC08.1** (Score ganzzahlig nach Formel)
 
 ---
 
@@ -369,15 +369,15 @@ Hint-Algorithmus versucht in dieser Reihenfolge:
 2. **Strategy B — Cage-Forced:** Wenn keine Naked-Single existiert, suche einen Cage, dessen Lösung eindeutig ist (z.B. 2-Zellen-Cage mit Sum=17 in unterschiedlichen Rows → muss `{8,9}` sein).
 3. **Fallback:** Wenn beide Strategien scheitern (selten bei harten Puzzles), lass den Solver eine beliebige leere Zelle der bekannten Lösung füllen.
 
-Siehe [UC07 Hint-Vorschlag (dokumentiert)](../use-cases.md#uc07--ask-for-a-hint).
+Siehe UC07 Hint-Vorschlag (dokumentiert).
 
 **Konsequenz:**
 - (+) Pädagogischer Mehrwert: Hint erklärt die Logik (Strategy A/B), nicht nur das Ergebnis
 - (+) Solver wird nur als Fallback gebraucht → Performance besser bei einfachen Puzzles
-- (+) HintsUsed-Counter wird in jedem Fall inkrementiert (siehe [UC07 Main](../use-cases.md#uc07--ask-for-a-hint))
+- (+) HintsUsed-Counter wird in jedem Fall inkrementiert (siehe UC07 Main)
 - (−) Hint-Algorithmus ist komplexer als ein reiner Solver-Aufruf — mehr Code, mehr Tests
 - (−) Tests müssen alle drei Pfade abdecken (Strategy A, B, Fallback)
-- Test-Anker: [AC07.1](../use-cases.md#uc07--ask-for-a-hint) (Hint füllt nur korrekte Zelle)
+- Test-Anker: **AC07.1** (Hint füllt nur korrekte Zelle)
 
 ---
 
@@ -401,13 +401,13 @@ Kandidaten für zusätzliche UCs:
 - Daily-Challenge
 
 **Entscheidung:**
-Gewählte UCs (siehe [`use-cases.md`](../use-cases.md#3-zusätzliche-use-cases-selbst-gewählt)):
+Gewählte UCs (siehe **Use-Cases-Dokument**):
 
 - **UC12 — Browse / Filter Puzzles** — Praktischer UX-Mehrwert, DB-Query-relevant (Integration-Test-Anker)
 - **UC13 — Pause / Resume Game** — Reale User-Anforderung (Sudoku-Spiele dauern lange), persistiert Game-State (Component- und Integration-Test-Anker)
 - **UC14 — Pencil Marks** — Standard-Feature aller Sudoku-Apps, demonstriert UI-State-Management (Component-Test-Anker)
 
-**Begründung der Auswahl (wörtlich aus [`use-cases.md`](../use-cases.md#3-zusätzliche-use-cases-selbst-gewählt)):**
+**Begründung der Auswahl (wörtlich aus **Use-Cases-Dokument**):**
 
 > - UC12 Browse/Filter — Praktischer Mehrwert (UX), DB-Query-relevant (Integration-Tests)
 > - UC13 Pause/Resume — Reale User-Anforderung (Sudoku-Spiele dauern lange), persistiert Game-State (Component + Integration)
@@ -420,7 +420,7 @@ Gewählte UCs (siehe [`use-cases.md`](../use-cases.md#3-zusätzliche-use-cases-s
 - (+) Jeder UC ergänzt Kernfunktionen (Solve-Flow), ohne neue Personas einzuführen → Scope bleibt eng
 - (+) Pencil Marks und Pause sind Standard-Feature-Erwartungen → User-Experience-Boost
 - (−) Bewusst NICHT gewählt: Multiplayer (würde Auth- und Sync-Komplexität explodieren), Admin (zweite Persona, mehr Routen)
-- (−) Browse-Filter erfordert Pagination-Logik (siehe [UC12 AC12.2](../use-cases.md#uc12--browse--filter-puzzles))
+- (−) Browse-Filter erfordert Pagination-Logik (siehe UC12 AC12.2)
 
 ---
 
@@ -433,7 +433,7 @@ Die README-Aufgabenstellung verlangt explizit: "create a database named 'sudoku'
 
 Alternativen:
 
-1. **Native-Only (Standard).** Prüfer installiert MS-SQL Express + .NET 10 SDK manuell, führt `sudoku.sql` aus, startet App via `dotnet run`. Standard und gut dokumentiert (siehe [§7.2 / §7.3](./07-deployment.md#72-infrastruktur-anforderungen-lokal)) — aber: Setup-Reibung, Plattform-Drift macOS/Windows/Linux.
+1. **Native-Only (Standard).** Prüfer installiert MS-SQL Express + .NET 10 SDK manuell, führt **Datenbank-Skript** aus, startet App via `dotnet run`. Standard und gut dokumentiert (siehe [§7.2 / §7.3](#chapter-7)) — aber: Setup-Reibung, Plattform-Drift macOS/Windows/Linux.
 2. **Klassisches Docker-Compose mit 2 Services.** Ein `mssql`-Service + ein `app`-Service mit Network-Bridge. Best-Practice für Production (saubere Trennung, Skalierbarkeit) — aber: zwei Container, zwei Lifecycle-Probleme, Wait-for-DB-Race-Condition vor App-Start.
 3. **Single-Image (DB + App in einem Container).** Multi-Stage Build mit `mssql/server:2022-latest` als Base + .NET-Runtime als Layer + Supervisor-Script (`docker-entrypoint.sh`) für sqlservr + dotnet. Anti-Pattern für Production, aber **ein einziger `docker run`-Befehl** für den Prüfer.
 
@@ -443,7 +443,7 @@ Alternativen:
 **Begründung:**
 - Der Wettbewerbs-Kontext ist Submission, nicht Production. Der Prüfer bewertet ein Mal — Skalierung oder Update-Pfade sind nicht relevant.
 - README §1.3 ("running on your machine") wird trotz Container erfüllt — der Container läuft auf der Maschine des Prüfers, die DB läuft im Container des Prüfers. Kein Cloud-Service involviert.
-- Das Image wird bei jedem `main`-Push via [`.github/workflows/docker.yml`](../../.github/workflows/docker.yml) gebaut und nach `ghcr.io/tim-fischer-zh/killer-sudoku:latest` gepusht → Prüfer kann mit einem `docker pull` ohne Local-Build verifizieren.
+- Das Image wird bei jedem `main`-Push via **.github/workflows/docker.yml** gebaut und nach `ghcr.io/tim-fischer-zh/killer-sudoku:latest` gepusht → Prüfer kann mit einem `docker pull` ohne Local-Build verifizieren.
 - Supervisor-Script handhabt Race-Condition (Wait-for-DB), idempotenter Schema-Apply via Marker-File.
 - Die Native-Variante bleibt als Fallback dokumentiert für Prüfer ohne Docker.
 
@@ -462,7 +462,7 @@ Alternativen:
 - Persistenz via Named-Volume `mssql-data`
 - Connection-String über `ConnectionStrings__Sudoku` Env-Var override-bar
 
-→ Vollständiges Setup in [§7.5 Container-Deployment](./07-deployment.md#75-container-deployment-single-image-docker).
+→ Vollständiges Setup in [§7.5 Container-Deployment](#chapter-7).
 
 ---
 
@@ -470,8 +470,8 @@ Alternativen:
 
 | ADR | Titel | Bezug |
 |-----|-------|-------|
-| [ADR-001](#adr-001--stack-net-10--blazor-server--ms-sql-server) | Stack: .NET 10 + Blazor Server + MS-SQL | [§7](./07-deployment.md), [§8](./08-cross-cutting.md) |
-| [ADR-002](#adr-002--cage-modellierung-relational-cage--cagecell) | Cage relational modelliert | [`erm.md`](../erm.md), [`sudoku.sql`](../../db/sudoku.sql) |
+| [ADR-001](#adr-001--stack-net-10--blazor-server--ms-sql-server) | Stack: .NET 10 + Blazor Server + MS-SQL | [§7](#chapter-7), [§8](#chapter-8) |
+| [ADR-002](#adr-002--cage-modellierung-relational-cage--cagecell) | Cage relational modelliert | **ER-Modell**, **Datenbank-Skript** |
 | [ADR-003](#adr-003--highscore-als-view-statt-tabelle) | Highscore als View | UC08, `vw_Highscore` |
 | [ADR-004](#adr-004--eine-zelle-pro-cage-pro-puzzle-via-trigger) | Cell-Uniqueness via Trigger | UC04, V06 |
 | [ADR-005](#adr-005--appuser-statt-user-t-sql-reserved-keyword) | AppUser statt User | T-SQL Reserved |
@@ -484,18 +484,18 @@ Alternativen:
 | [ADR-012](#adr-012--score-formel-max0-10000--timeseconds--hintsused--300) | Score-Formel | UC08 |
 | [ADR-013](#adr-013--hint-strategie-naked-single--cage-forced--solver-fallback) | Hint-Strategie | UC07 |
 | [ADR-014](#adr-014--auswahl-der-3-zusätzlichen-use-cases) | 3 zusätzliche UCs | README §2.3 |
-| [ADR-015](#adr-015--single-image-container-für-prüferbequemlichkeit) | Single-Image Docker (DB + App) | [§7.5](./07-deployment.md#75-container-deployment-single-image-docker) |
+| [ADR-015](#adr-015--single-image-container-für-prüferbequemlichkeit) | Single-Image Docker (DB + App) | [§7.5](#chapter-7) |
 
 ---
 
 ## Verweise
 
-- [Kapitel 1 — Einführung und Ziele](./01-introduction.md)
-- [Kapitel 7 — Verteilungssicht](./07-deployment.md)
-- [Kapitel 8 — Querschnittliche Konzepte](./08-cross-cutting.md)
-- [`use-cases.md`](../use-cases.md)
-- [`validation.md`](../validation.md)
-- [`erm.md`](../erm.md)
-- [`functionality.md`](../functionality.md)
-- [`sudoku.sql`](../../db/sudoku.sql)
-- [`skillsbattle2026_1.1.md`](../../skillsbattle2026_1.1.md) — Aufgabenstellung (autoritativ)
+- [Kapitel 1 — Einführung und Ziele](#chapter-1)
+- [Kapitel 7 — Verteilungssicht](#chapter-7)
+- [Kapitel 8 — Querschnittliche Konzepte](#chapter-8)
+- **Use-Cases-Dokument**
+- **Validation-Regeln**
+- **ER-Modell**
+- **Funktionalitäts-Matrix**
+- **Datenbank-Skript**
+- **Aufgabenstellung** — Aufgabenstellung (autoritativ)

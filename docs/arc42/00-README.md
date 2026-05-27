@@ -33,7 +33,7 @@ Dieses Dokument folgt dem arc42-Template. Jedes Kapitel ist ein eigenständiges 
 - [`../functionality.md`](../functionality.md) — UC × Screen × Service × DB-Matrix
 - [`../validation.md`](../validation.md) — V01–V16 Validation-Regeln + Test-Mapping
 - [`../mockup-briefs.md`](../mockup-briefs.md) — Figma-Mockup-Briefings
-- [`../test-protocol.md`](../test-protocol.md) — Test-Protokoll (Submission 12:00)
+- [`../test-protocol.md`](../test-protocol.md) — Test-Protokoll (Submission 11:30)
 - [`../mockups/`](../mockups/) — Generierte Mockup-PNGs
 - [`../../db/sudoku.sql`](../../db/sudoku.sql) — DB-Schema
 - [`../../skillsbattle2026_1.1.md`](../../skillsbattle2026_1.1.md) — **Original Aufgabenstellung (autoritativ)**

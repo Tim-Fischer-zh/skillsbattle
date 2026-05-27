@@ -45,7 +45,7 @@ Notation:
   3. Submit
   4. Server validiert (Unique Username/Email, Passwort-Stärke, Match)
   5. Passwort wird gehasht (ASP.NET Identity / BCrypt)
-  6. User wird in DB gespeichert (Tabelle `User`)
+  6. User wird in DB gespeichert (Tabelle `AppUser`)
   7. Redirect zu Login (oder Auto-Login)
 - **Alt:**
   - 4a Username/Email bereits vergeben → Fehlermeldung am Feld
@@ -116,11 +116,13 @@ Notation:
 - **Trigger:** Submit aus UC04
 - **Pre:** Puzzle-Struktur aus UC04 ist gültig
 - **Main:**
-  1. Server ruft Solver-Algorithmus (UC11) auf
-  2. Solver prüft Existenz UND Eindeutigkeit der Lösung
-  3. Falls genau 1 Lösung existiert → Puzzle wird in DB gespeichert (`Puzzle` + `Cage` + `CageCell`)
-  4. Bestätigung an User
+  1. Server prüft **Cage-Sum-Fast-Fail**: Σ aller Cage-Sums == 405? Wenn nicht → sofort Reject ohne Solver-Aufruf (README §2.3: "Use the value for a 'simple' validation **before** checking the solution with an algorithm **and saving** the captured puzzle.")
+  2. Server ruft Solver-Algorithmus (UC11) auf
+  3. Solver prüft Existenz UND Eindeutigkeit der Lösung
+  4. Falls genau 1 Lösung existiert → Puzzle wird in DB gespeichert (`Puzzle` + `Cage` + `CageCell`)
+  5. Bestätigung an User
 - **Alt:**
+  - 1a Σ Cage-Sums ≠ 405 → Fehler "Cage-Summen ergeben kein gültiges Killer-Sudoku" (Fast-Fail, kein Solver-Call)
   - 2a Keine Lösung möglich → Fehler "Puzzle ist nicht lösbar", NICHT speichern
   - 2b Mehrere Lösungen möglich → Fehler "Puzzle hat mehr als eine Lösung", NICHT speichern
 - **Post:** Solvable + eindeutiges Puzzle in DB; nicht-lösbares wird verworfen
@@ -128,7 +130,8 @@ Notation:
   - AC05.1: Puzzle wird **nur** gespeichert wenn Solver genau 1 Lösung findet
   - AC05.2: Multi-Solution-Puzzles werden abgelehnt (Spec: "solution must be unique")
   - AC05.3: Bei Reject: Eingabe bleibt im Formular erhalten (kein Datenverlust)
-- **Source:** "The puzzle can only be saved if it is solvable. Check with an algorithm if the puzzle can be solved before saving." + "The solution must be unique."
+  - AC05.4: Σ Cage-Sums = 405 wird VOR dem Solver-Call geprüft (Performance + Spec §2.3)
+- **Source:** "The puzzle can only be saved if it is solvable. Check with an algorithm if the puzzle can be solved before saving." + "The solution must be unique." + "Use the value for a 'simple' validation before checking the solution with an algorithm and saving the captured puzzle." (§2.3)
 
 ---
 
@@ -241,7 +244,7 @@ Notation:
   1. Server berechnet `TimeSeconds = EndTime - StartTime`
   2. Server berechnet Score (siehe UC08)
   3. `Game`-Datensatz wird mit EndTime, TimeSeconds, HintsUsed, Score, IsCompleted=1 aktualisiert
-  4. `Highscore`-Eintrag wird erstellt (denormalisierte View für Listing-Performance)
+  4. Game wird durch die VIEW `vw_Highscore` für UC08 sichtbar (kein separater INSERT — VIEW joint Game ↔ AppUser ↔ Puzzle und filtert `IsCompleted = 1`)
 - **Alt:** —
 - **Post:** Ergebnis persistent, taucht im Highscore auf
 - **AC:**

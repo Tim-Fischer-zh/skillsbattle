@@ -1,4 +1,4 @@
-# Entity Relationship Model — Killer Sudoku
+<h1 id="section-2">Sektion 2 — Entity Relationship Model — Killer Sudoku</h1>
 
 **DB-Engine:** Microsoft SQL Server Express
 **Database-Name:** `sudoku`
@@ -8,71 +8,71 @@
 
 ```mermaid
 erDiagram
-    AppUser   ||--o{ Puzzle    : creates
-    AppUser   ||--o{ Game      : plays
-    Puzzle    ||--o{ Cage      : contains
-    Puzzle    ||--o{ Game      : "is played in"
-    Cage      ||--|{ CageCell  : has
-    Game      ||--|{ GameCell  : has
-    Game      ||--o{ PencilMark: has
-    Game      ||--o{ HintLog   : logs
+ AppUser ||--o{ Puzzle : creates
+ AppUser ||--o{ Game : plays
+ Puzzle ||--o{ Cage : contains
+ Puzzle ||--o{ Game : "is played in"
+ Cage ||--|{ CageCell : has
+ Game ||--|{ GameCell : has
+ Game ||--o{ PencilMark: has
+ Game ||--o{ HintLog : logs
 
-    AppUser {
-        int      Id           PK
-        nvarchar Username     UK
-        nvarchar Email        UK
-        nvarchar PasswordHash
-        datetime2 CreatedAt
-    }
-    Puzzle {
-        int       Id          PK
-        tinyint   Difficulty
-        int       CreatedById FK
-        datetime2 CreatedAt
-    }
-    Cage {
-        int     Id        PK
-        int     PuzzleId  FK
-        tinyint Sum
-    }
-    CageCell {
-        int     CageId    PK,FK
-        tinyint RowIdx    PK
-        tinyint ColIdx    PK
-    }
-    Game {
-        int       Id                 PK
-        int       UserId             FK
-        int       PuzzleId           FK
-        datetime2 StartTime
-        datetime2 EndTime
-        int       TimeSeconds
-        int       HintsUsed
-        int       Score
-        bit       IsCompleted
-        bit       IsPaused
-        datetime2 PausedAt
-        int       TotalPausedSeconds
-    }
-    GameCell {
-        int     GameId   PK,FK
-        tinyint RowIdx   PK
-        tinyint ColIdx   PK
-        tinyint CellValue
-    }
-    PencilMark {
-        int     GameId    PK,FK
-        tinyint RowIdx    PK
-        tinyint ColIdx    PK
-        tinyint MarkValue PK
-    }
-    HintLog {
-        int       Id       PK
-        int       GameId   FK
-        tinyint   RowIdx
-        tinyint   ColIdx
-        datetime2 HintAt
-    }
+ AppUser {
+ int Id PK
+ nvarchar Username UK
+ nvarchar Email UK
+ nvarchar PasswordHash
+ datetime2 CreatedAt
+ }
+ Puzzle {
+ int Id PK
+ tinyint Difficulty
+ int CreatedById FK
+ datetime2 CreatedAt
+ }
+ Cage {
+ int Id PK
+ int PuzzleId FK
+ tinyint Sum
+ }
+ CageCell {
+ int CageId PK,FK
+ tinyint RowIdx PK
+ tinyint ColIdx PK
+ }
+ Game {
+ int Id PK
+ int UserId FK
+ int PuzzleId FK
+ datetime2 StartTime
+ datetime2 EndTime
+ int TimeSeconds
+ int HintsUsed
+ int Score
+ bit IsCompleted
+ bit IsPaused
+ datetime2 PausedAt
+ int TotalPausedSeconds
+ }
+ GameCell {
+ int GameId PK,FK
+ tinyint RowIdx PK
+ tinyint ColIdx PK
+ tinyint CellValue
+ }
+ PencilMark {
+ int GameId PK,FK
+ tinyint RowIdx PK
+ tinyint ColIdx PK
+ tinyint MarkValue PK
+ }
+ HintLog {
+ int Id PK
+ int GameId FK
+ tinyint RowIdx
+ tinyint ColIdx
+ datetime2 HintAt
+ }
 ```
 
 ## Design-Entscheidungen
@@ -84,7 +84,7 @@ erDiagram
 | Cage-Modell | Relational (Cage + CageCell) | FK-Integrity, easy joins, prüfer-testbar via SQL |
 | Solution-Speicherung | **NICHT** in DB | UC04 README: "No solution is recorded" |
 | Highscore | als **VIEW** `vw_Highscore` | Single source of truth via JOIN, kein Sync-Problem |
-| "Eine Zelle pro Cage in einem Puzzle" | Application-Layer + Trigger ODER UNIQUE-Index | siehe `sudoku.sql` Constraint-Diskussion |
+| "Eine Zelle pro Cage in einem Puzzle" | Application-Layer + Trigger ODER UNIQUE-Index | siehe **Datenbank-Skript** Constraint-Diskussion |
 | Game-Pause | `IsPaused` + `PausedAt` + `TotalPausedSeconds` | erlaubt sauberen Timer-Resume, `TimeSeconds = TotalPausedSeconds + (EndTime - StartTime)` |
 | GameCell.CellValue | NULL erlaubt | leere Zelle vs eingetragener Wert |
 | PencilMark Modell | eigene Tabelle mit Composite PK | (GameId, Row, Col, Value) — bis zu 9 Marks pro Zelle |

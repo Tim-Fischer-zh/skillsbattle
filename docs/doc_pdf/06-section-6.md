@@ -1,4 +1,4 @@
-# Test Protocol — Killer Sudoku
+<h1 id="section-6">Sektion 6 — Test Protocol — Killer Sudoku</h1>
 
 **Stack:** .NET 10, Blazor Server, MS-SQL Express
 **Frameworks:** xUnit (Unit/Integration), bUnit (Component), FluentAssertions, WebApplicationFactory + Testcontainers-MSSQL (Integration-DB), Playwright .NET (E2E)
@@ -8,11 +8,11 @@
 
 | Code | Type | Tool | Zweck |
 |------|------|------|-------|
-| U    | Unit | xUnit + FluentAssertions | Reine Logik (Solver, Validator, Score-Formel) |
-| C    | Component | bUnit | Blazor-Component-Rendering + Events |
-| I    | Integration | xUnit + WebApplicationFactory + Testcontainers-MSSQL | Service + EF + DB |
-| E    | E2E  | Playwright .NET | Voller User-Flow via Browser |
-| M    | Manual | — (Excel-Steps) | Visuelle UI / Browser-Compat-Checks |
+| U | Unit | xUnit + FluentAssertions | Reine Logik (Solver, Validator, Score-Formel) |
+| C | Component | bUnit | Blazor-Component-Rendering + Events |
+| I | Integration | xUnit + WebApplicationFactory + Testcontainers-MSSQL | Service + EF + DB |
+| E | E2E | Playwright .NET | Voller User-Flow via Browser |
+| M | Manual | — (Excel-Steps) | Visuelle UI / Browser-Compat-Checks |
 
 ## Priorität
 
@@ -230,21 +230,21 @@
 
 | UC | Tests | Positiv | Negativ | Boundary | README-§3.1-Erfüllung |
 |----|------:|--------:|--------:|---------:|:---------------------:|
-| UC01 Read Rules            | 4 | 3 | 1 | n/a (statisch) | ✓ |
-| UC02 Create User           | 9 | 3 | 5 | 1 (Username 2/3/50/51) | ✓ |
-| UC03 Login                 | 7 | 4 | 2 | 1 (5-Fehler Rate-Limit) | ✓ |
-| UC04 Enter Puzzle          | 8 | 2 | 4 | 2 (Diff 0/1/3/4 + Cage-Sum 0/1/45/46) | ✓ |
-| UC05 Save Puzzle           | 6 | 1 | 4 | 1 (Solver-Perf < 2 s) | ✓ |
-| UC06 Solve Puzzle          | 4 | 2 | 1 | 1 (Cell 1/9/10) | ✓ |
-| UC07 Hint                  | 6 | 3 | 1 | 2 (Falsch-Wert-Edge + 80/81-letzte) | ✓ |
-| UC08 High Score            | 5 | 3 | 1 | 1 (Score-Floor=0) | ✓ |
-| UC09 Check Solution        | 9 | 1 | 7 | 1 (Sum-Check-First Spy) | ✓ |
-| UC10 Save Result           | 5 | 2 | 2 | 1 (Hints=0 → max Score) | ✓ |
-| UC11 Auto Solve            | 7 | 3 | 3 | 1 (Perf < 2 s) | ✓ |
-| UC12 Browse / Filter       | 6 | 4 | 1 | 1 (Page=0) | ✓ |
-| UC13 Pause / Resume        | 6 | 4 | 1 | 1 (Multi-Cycle Akkumulation) | ✓ |
-| UC14 Pencil Marks          | 7 | 5 | 1 | 1 (9 Marks max) | ✓ |
-| Manual (cross-UC visual)   | 5 | — | — | — | n/a (visuell) |
+| UC01 Read Rules | 4 | 3 | 1 | n/a (statisch) | ✓ |
+| UC02 Create User | 9 | 3 | 5 | 1 (Username 2/3/50/51) | ✓ |
+| UC03 Login | 7 | 4 | 2 | 1 (5-Fehler Rate-Limit) | ✓ |
+| UC04 Enter Puzzle | 8 | 2 | 4 | 2 (Diff 0/1/3/4 + Cage-Sum 0/1/45/46) | ✓ |
+| UC05 Save Puzzle | 6 | 1 | 4 | 1 (Solver-Perf < 2 s) | ✓ |
+| UC06 Solve Puzzle | 4 | 2 | 1 | 1 (Cell 1/9/10) | ✓ |
+| UC07 Hint | 6 | 3 | 1 | 2 (Falsch-Wert-Edge + 80/81-letzte) | ✓ |
+| UC08 High Score | 5 | 3 | 1 | 1 (Score-Floor=0) | ✓ |
+| UC09 Check Solution | 9 | 1 | 7 | 1 (Sum-Check-First Spy) | ✓ |
+| UC10 Save Result | 5 | 2 | 2 | 1 (Hints=0 → max Score) | ✓ |
+| UC11 Auto Solve | 7 | 3 | 3 | 1 (Perf < 2 s) | ✓ |
+| UC12 Browse / Filter | 6 | 4 | 1 | 1 (Page=0) | ✓ |
+| UC13 Pause / Resume | 6 | 4 | 1 | 1 (Multi-Cycle Akkumulation) | ✓ |
+| UC14 Pencil Marks | 7 | 5 | 1 | 1 (9 Marks max) | ✓ |
+| Manual (cross-UC visual) | 5 | — | — | — | n/a (visuell) |
 | **Total** | **94** | | | | **alle 14 UCs ✓** |
 
 → README §3.1 Mindestanforderung pro UC erfüllt; UC01 ohne echten Boundary (Klausel "where possible" greift, statische Seite).
