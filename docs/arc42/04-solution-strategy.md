@@ -33,12 +33,12 @@ Das System wird in eine **klassische 3-Layer-Architektur** zerlegt, ergänzt um 
 ```mermaid
 flowchart TB
     subgraph Presentation["Presentation Layer<br/>KillerSudoku.Web"]
-        Pages["Blazor Pages<br/>(Home, Login, Register,<br/>PuzzleList, EnterPuzzle,<br/>PlayPuzzle, Highscore)"]
+        Pages["Blazor Pages<br/>(Home, Login, Register,<br/>Puzzles, EnterPuzzle,<br/>PlayPuzzle, Highscore)"]
         Components["Blazor Components<br/>(PuzzleGrid, CageEditor,<br/>HintButton, Toolbar, ...)"]
+        Identity["ASP.NET Identity<br/>SignInManager · UserManager"]
     end
 
-    subgraph Application["Application Layer<br/>KillerSudoku.Core (Services)"]
-        AuthSvc["IAuthService"]
+    subgraph Application["Application Layer<br/>(KillerSudoku.Data/Services)"]
         PuzzleSvc["IPuzzleService"]
         GameSvc["IGameService"]
         HintSvc["IHintService"]

@@ -11,7 +11,9 @@ Die Kontextabgrenzung beschreibt die Systemgrenze: **welche Akteure** mit der An
 
 ### System-Grenze
 
-Die Killer-Sudoku-App ist ein **lokal betriebenes Single-User-System** mit einer Web-UI. Es existieren **keine externen Fachsysteme** (kein Drittanbieter-Login, keine externen APIs, keine Bezahl-/Mailservices).
+Die Killer-Sudoku-App ist primär ein **lokal betriebenes System** mit einer Web-UI (Spec-konform laut README §1.3). Es existieren **keine externen Fachsysteme** (kein Drittanbieter-Login, keine externen APIs, keine Bezahl-/Mailservices).
+
+> **Zusätzlich:** Eine **Bonus-Production-Instanz** der App ist unter `https://web17skill.com` erreichbar (siehe [§7.6 Production-Deployment](./07-deployment.md#76-production-deployment-bonus-live-demo-unter-web17skillcom) und [ADR-016](./09-decisions.md#adr-016--production-deployment-via-self-hosted-runner--cloudflare-tunnel)). Diese Variante ist **nicht** Pflicht laut Aufgabenstellung und ändert weder den fachlichen Kontext noch die Systemgrenze — sie ist nur eine andere Betriebsumgebung desselben Images.
 
 ```mermaid
 graph LR

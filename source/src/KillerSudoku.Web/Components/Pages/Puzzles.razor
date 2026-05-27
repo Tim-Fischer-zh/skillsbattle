@@ -1,0 +1,125 @@
+@page "/puzzles"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using KillerSudoku.Core.Abstractions
+@using KillerSudoku.Core.Models
+@inject IPuzzleService PuzzleSvc
+
+<PageTitle>Puzzles &middot; Killer Sudoku</PageTitle>
+
+<section class="puzzles">
+    <div class="container">
+        <header class="puzzles__head">
+            <div>
+                <h1>Puzzles</h1>
+                <p class="puzzles__subtitle">W&auml;hle ein Puzzle zum L&ouml;sen.</p>
+            </div>
+            <a class="btn btn-primary" href="/puzzles/new">+ Neues Puzzle</a>
+        </header>
+
+        <div class="puzzles__toolbar">
+            <div class="filter-pills" role="tablist" aria-label="Filter nach Schwierigkeit">
+                <button type="button"
+                        class="filter-pill @(IsActive(null) ? "filter-pill--active" : "")"
+                        @onclick="() => SetFilter(null)">
+                    Alle
+                    <span class="filter-pill__count">@_all.Count</span>
+                </button>
+                <button type="button"
+                        class="filter-pill @(IsActive((byte)1) ? "filter-pill--active" : "")"
+                        @onclick="() => SetFilter(1)">
+                    Einfach (1)
+                </button>
+                <button type="button"
+                        class="filter-pill @(IsActive((byte)2) ? "filter-pill--active" : "")"
+                        @onclick="() => SetFilter(2)">
+                    Mittel (2)
+                </button>
+                <button type="button"
+                        class="filter-pill @(IsActive((byte)3) ? "filter-pill--active" : "")"
+                        @onclick="() => SetFilter(3)">
+                    Schwer (3)
+                </button>
+            </div>
+        </div>
+
+        @if (Filtered.Count == 0)
+        {
+            <div class="puzzles__empty">
+                <p>Keine Puzzles f&uuml;r diesen Filter gefunden.</p>
+            </div>
+        }
+        else
+        {
+            <div class="puzzle-grid" data-testid="puzzle-grid">
+                @foreach (var p in Filtered)
+                {
+                    <article class="puzzle-card" data-testid="puzzle-card" data-difficulty="@p.Difficulty">
+                        <div class="puzzle-card__preview" aria-hidden="true">
+                            <div class="puzzle-card__preview-grid"></div>
+                        </div>
+                        <div class="puzzle-card__body">
+                            <div class="puzzle-card__top">
+                                <span class="difficulty-badge difficulty-@p.Difficulty">@p.Difficulty</span>
+                                <span class="puzzle-card__date">@FormatRelative(p.CreatedAt)</span>
+                            </div>
+                            <p class="puzzle-card__creator">von <strong>@p.CreatedBy</strong></p>
+                            <p class="puzzle-card__score">
+                                @if (p.MyBestScore is int s)
+                                {
+                                    <text>Mein Score: <strong>@s</strong></text>
+                                }
+                                else
+                                {
+                                    <text>Noch nicht gespielt</text>
+                                }
+                            </p>
+                            <a class="btn btn-outline puzzle-card__cta" href="/puzzles/@p.Id/play">Spielen</a>
+                        </div>
+                    </article>
+                }
+            </div>
+
+            <nav class="pagination" aria-label="Pagination">
+                <button type="button" class="btn btn-ghost" disabled>&larr; Zur&uuml;ck</button>
+                <span class="pagination__info">Seite 1 von 1</span>
+                <button type="button" class="btn btn-ghost" disabled>Weiter &rarr;</button>
+            </nav>
+        }
+    </div>
+</section>
+
+@code {
+    private byte? _filter;
+    private IReadOnlyList<PuzzleSummary> _all = Array.Empty<PuzzleSummary>();
+    private bool _loaded;
+
+    private bool IsActive(byte? value) => _filter == value;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var page = await PuzzleSvc.ListAsync(difficulty: null, page: 1, pageSize: 100);
+        _all = page.Items;
+        _loaded = true;
+    }
+
+    private async Task SetFilter(byte? value)
+    {
+        _filter = value;
+        var page = await PuzzleSvc.ListAsync(difficulty: value, page: 1, pageSize: 100);
+        _all = page.Items;
+    }
+
+    private IReadOnlyList<PuzzleSummary> Filtered => _all;
+
+    private static string FormatRelative(DateTime created)
+    {
+        var days = (int)Math.Max(0, (DateTime.UtcNow - created).TotalDays);
+        return days switch
+        {
+            0 => "Heute",
+            1 => "Vor 1 Tag",
+            _ => $"Vor {days} Tagen"
+        };
+    }
+}

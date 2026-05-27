@@ -66,7 +66,7 @@ Die Wahl ist intern; das Build- und Test-Setup muss in **allen drei** funktionie
 
 | Termin | Pflicht (wörtliches Zitat) |
 |--------|----------------------------|
-| **12:00 Uhr** (Wettbewerbstag) | "submission of the planned test cases **must take place by 12 o'clock**" (README §1.4 + §3.1). |
+| **11:30 Uhr** (Wettbewerbstag) | "submission of the planned test cases **must take place by 12 o'clock**" (README §1.4 + §3.1). |
 | **Ende Wettbewerbstag** | Komplette Submission (ZIP) gemäss README §1.4. |
 
 ### Deliverables (README §1.4, wörtlich)

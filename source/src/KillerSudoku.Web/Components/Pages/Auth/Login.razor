@@ -1,0 +1,133 @@
+@page "/login"
+@layout KillerSudoku.Web.Components.Layout.MainLayout
+@using System.ComponentModel.DataAnnotations
+@using KillerSudoku.Data.Entities
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<AppUser> UserManager
+@inject SignInManager<AppUser> SignInManager
+@inject NavigationManager Nav
+
+<PageTitle>Anmelden &middot; Killer Sudoku</PageTitle>
+
+<section class="auth">
+    <div class="auth__container">
+        <div class="auth-card" data-testid="login-card">
+            <h2>Anmelden</h2>
+
+            @if (!string.IsNullOrEmpty(_errorMessage))
+            {
+                <div class="auth-card__banner auth-card__banner--error" role="alert" data-testid="login-error-banner">
+                    @_errorMessage
+                </div>
+            }
+
+            <EditForm Model="Input" method="post" OnValidSubmit="HandleLoginAsync" FormName="login" Enhance="false" data-testid="login-form">
+                <DataAnnotationsValidator />
+
+                <div class="form-field">
+                    <label for="login-username">Username oder Email</label>
+                    <InputText id="login-username"
+                               class="form-input"
+                               @bind-Value="Input.UsernameOrEmail"
+                               autocomplete="username"
+                               data-testid="login-username" />
+                    <ValidationMessage For="() => Input.UsernameOrEmail" class="form-error" />
+                </div>
+
+                <div class="form-field">
+                    <label for="login-password">Passwort</label>
+                    <InputText id="login-password"
+                               type="password"
+                               class="form-input"
+                               @bind-Value="Input.Password"
+                               autocomplete="current-password"
+                               data-testid="login-password" />
+                    <ValidationMessage For="() => Input.Password" class="form-error" />
+                </div>
+
+                <button type="submit" class="btn btn-primary auth-card__submit" data-testid="login-submit">
+                    Anmelden
+                </button>
+            </EditForm>
+
+            <p class="auth-card__link">
+                Noch kein Account? <a href="/register">&rarr; Registrieren</a>
+            </p>
+        </div>
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromForm(FormName = "login")]
+    public LoginInput Input { get; set; } = null!;
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private string? _errorMessage;
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task HandleLoginAsync()
+    {
+        _errorMessage = null;
+
+        var raw = (Input.UsernameOrEmail ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(raw) || string.IsNullOrEmpty(Input.Password))
+        {
+            _errorMessage = "Username oder Passwort falsch";
+            return;
+        }
+
+        // If the input looks like an email, resolve to username first.
+        // (PasswordSignInAsync expects a username, not an email.)
+        var loginName = raw;
+        if (raw.Contains('@'))
+        {
+            var byEmail = await UserManager.FindByEmailAsync(raw.ToLowerInvariant());
+            if (byEmail?.UserName is { Length: > 0 } resolved)
+            {
+                loginName = resolved;
+            }
+        }
+
+        var result = await SignInManager.PasswordSignInAsync(
+            loginName,
+            Input.Password,
+            isPersistent: false,
+            lockoutOnFailure: true);
+
+        if (result.Succeeded)
+        {
+            var target = !string.IsNullOrEmpty(ReturnUrl) && IsLocalUrl(ReturnUrl)
+                ? ReturnUrl!
+                : "/puzzles";
+            Nav.NavigateTo(target);
+            return;
+        }
+
+        if (result.IsLockedOut)
+        {
+            _errorMessage = "Zu viele fehlgeschlagene Anmeldungen. Bitte in 5 Minuten erneut versuchen.";
+            return;
+        }
+
+        // V03 / AC03.1 — generic, do NOT disclose which of the two was wrong.
+        _errorMessage = "Username oder Passwort falsch";
+    }
+
+    private static bool IsLocalUrl(string url)
+        => !string.IsNullOrEmpty(url)
+           && url.StartsWith('/')
+           && !url.StartsWith("//", StringComparison.Ordinal)
+           && !url.StartsWith("/\\", StringComparison.Ordinal);
+
+    public sealed class LoginInput
+    {
+        [Required(ErrorMessage = "Bitte gib Username oder Email an.")]
+        public string? UsernameOrEmail { get; set; }
+
+        [Required(ErrorMessage = "Bitte gib dein Passwort an.")]
+        public string? Password { get; set; }
+    }
+}

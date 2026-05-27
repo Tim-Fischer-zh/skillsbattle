@@ -1,0 +1,389 @@
+@page "/puzzles/{PuzzleId:int}/play"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using KillerSudoku.Core.Abstractions
+@using KillerSudoku.Core.Models
+@using KillerSudoku.Data.Entities
+@using KillerSudoku.Data.Persistence
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@inject SudokuDbContext Db
+@inject IGameService GameSvc
+@inject IHintService HintSvc
+@inject AuthenticationStateProvider AuthState
+@inject UserManager<AppUser> UserMgr
+@inject NavigationManager Nav
+
+<PageTitle>Spielen &middot; Killer Sudoku</PageTitle>
+
+@if (_loadError is not null)
+{
+    <section class="play">
+        <div class="container play__error">
+            <p>@_loadError</p>
+            <a class="btn btn-outline" href="/puzzles">&larr; Zurück zur Liste</a>
+        </div>
+    </section>
+}
+else if (_game is null)
+{
+    <section class="play"><div class="container">Lade Spiel&hellip;</div></section>
+}
+else
+{
+    <section class="play">
+        <div class="container">
+            <header class="play__head">
+                <div class="play__head-left">
+                    <a class="play__back" href="/puzzles">&larr; Zurück zur Liste</a>
+                    <span class="diff-badge">Diff. @_game.Puzzle.Difficulty</span>
+                    <span class="play__creator">von @(_game.Puzzle.CreatedBy?.UserName ?? "?")</span>
+                </div>
+                <div class="play__head-right">
+                    <span class="play__timer" aria-label="Spielzeit">⏱ @FormatElapsed()</span>
+                    <span class="play__hints" aria-label="Hints">💡 @_game.HintsUsed</span>
+                </div>
+            </header>
+
+            <div class="play__body">
+                <div class="play__grid-col">
+                    <div class="grid grid--play @(_isPaused ? "grid--paused" : "")"
+                         role="grid" aria-label="9 mal 9 Killer-Sudoku-Spielfeld">
+                        @for (byte r = 0; r < 9; r++)
+                        {
+                            byte row = r;
+                            <div class="grid-row" role="row">
+                                @for (byte c = 0; c < 9; c++)
+                                {
+                                    byte col = c;
+                                    var key = (row, col);
+                                    var cellState = GetCell(row, col);
+                                    var isActive = _activeCell == key;
+                                    var isCageStart = _cageStartCells.Contains(key);
+                                    var cageSum = isCageStart ? _cellToCageSum[key].ToString() : null;
+                                    var cssClass = $"grid-cell grid-cell--cage-{_cellToCageColor[key]} " +
+                                                   (isActive ? "grid-cell--active " : "") +
+                                                   (cellState.IsHint ? "grid-cell--hint " : "") +
+                                                   GetBorderClass(row, col);
+
+                                    <button type="button" class="@cssClass"
+                                            role="gridcell"
+                                            aria-label="@($"Zelle ({row},{col})")"
+                                            @onclick="@(() => SelectCell(row, col))"
+                                            disabled="@_isPaused">
+                                        @if (cageSum is not null)
+                                        {
+                                            <span class="grid-cell__cage-sum">@cageSum</span>
+                                        }
+                                        @if (cellState.Value.HasValue)
+                                        {
+                                            <span class="grid-cell__value">@cellState.Value</span>
+                                        }
+                                        else if (cellState.PencilMarks.Count > 0)
+                                        {
+                                            <span class="grid-cell__pencils">
+                                                @for (byte d = 1; d <= 9; d++)
+                                                {
+                                                    byte digit = d;
+                                                    <span class="grid-cell__pencil @(cellState.PencilMarks.Contains(digit) ? "is-on" : "")">@(cellState.PencilMarks.Contains(digit) ? digit.ToString() : "")</span>
+                                                }
+                                            </span>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        @if (_isPaused)
+                        {
+                            <div class="grid__pause-overlay">
+                                <span>Pausiert</span>
+                                <button type="button" class="btn btn-primary" @onclick="ResumeAsync">Weiterspielen</button>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <aside class="play__toolbar">
+                    <div class="numpad">
+                        <span class="toolbar__label">Eingabe</span>
+                        <div class="numpad__grid">
+                            @for (byte n = 1; n <= 9; n++)
+                            {
+                                byte num = n;
+                                <button type="button"
+                                        class="numpad__btn"
+                                        disabled="@(_isPaused || _activeCell is null)"
+                                        @onclick="() => InputNumberAsync(num)">@num</button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="toolbar__row">
+                        <button type="button"
+                                class="btn btn-toggle @(_pencilMode ? "is-on" : "")"
+                                disabled="@_isPaused"
+                                @onclick="TogglePencilMode">@(_pencilMode ? "✎ Bleistift AN" : "✎ Bleistift")</button>
+                        <button type="button"
+                                class="btn btn-outline"
+                                disabled="@(_isPaused || _activeCell is null)"
+                                @onclick="EraseActiveAsync">⌫ Löschen</button>
+                    </div>
+
+                    <div class="toolbar__actions">
+                        <button type="button"
+                                class="btn btn-primary"
+                                disabled="@(_isPaused || _isComplete)"
+                                @onclick="HintAsync">💡 Tipp anfordern</button>
+
+                        <button type="button"
+                                class="btn btn-outline"
+                                @onclick="PauseToggleAsync">@(_isPaused ? "▶ Weiterspielen" : "⏸ Pausieren")</button>
+
+                        <button type="button"
+                                class="btn btn-success"
+                                disabled="@(_isPaused || !_isComplete)"
+                                @onclick="CheckAsync">✓ Lösung prüfen</button>
+                    </div>
+
+                    @if (_message is not null)
+                    {
+                        <div class="play__message @(_messageIsError ? "play__message--error" : "play__message--success")">@_message</div>
+                    }
+                </aside>
+            </div>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public int PuzzleId { get; set; }
+
+    private Game? _game;
+    private string? _loadError;
+    private (byte Row, byte Col)? _activeCell;
+    private bool _pencilMode;
+    private bool _isPaused;
+    private bool _isComplete;
+    private string? _message;
+    private bool _messageIsError;
+    private DateTime _renderTime = DateTime.UtcNow;
+
+    private readonly Dictionary<(byte, byte), CellState> _cells = new();
+    private readonly Dictionary<(byte, byte), int> _cellToCageId = new();
+    private readonly Dictionary<(byte, byte), int> _cellToCageColor = new();
+    private readonly Dictionary<(byte, byte), int> _cellToCageSum = new();
+    private readonly HashSet<(byte, byte)> _cageStartCells = new();
+
+    private record class CellState
+    {
+        public byte? Value { get; set; }
+        public bool IsHint { get; set; }
+        public HashSet<byte> PencilMarks { get; init; } = new();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        if (!auth.User.Identity?.IsAuthenticated ?? true) { Nav.NavigateTo($"/login?ReturnUrl=/puzzles/{PuzzleId}/play", true); return; }
+        var user = await UserMgr.GetUserAsync(auth.User);
+        if (user is null) { _loadError = "Benutzer nicht gefunden."; return; }
+
+        var puzzle = await Db.Puzzles
+            .Include(p => p.CreatedBy)
+            .Include(p => p.Cages).ThenInclude(c => c.Cells)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == PuzzleId);
+        if (puzzle is null) { _loadError = "Puzzle nicht gefunden."; return; }
+
+        int gameId;
+        try
+        {
+            gameId = await GameSvc.StartGameAsync(user.Id, PuzzleId);
+        }
+        catch (Exception ex)
+        {
+            _loadError = $"Spiel konnte nicht gestartet werden: {ex.Message}";
+            return;
+        }
+
+        _game = await Db.Games
+            .Include(g => g.Cells)
+            .Include(g => g.PencilMarks)
+            .Include(g => g.Puzzle).ThenInclude(p => p.CreatedBy)
+            .Include(g => g.Puzzle).ThenInclude(p => p.Cages).ThenInclude(c => c.Cells)
+            .FirstOrDefaultAsync(g => g.Id == gameId);
+
+        if (_game is null) { _loadError = "Spielzustand konnte nicht geladen werden."; return; }
+
+        _isPaused = _game.IsPaused;
+        BuildCageMap();
+        BuildCellMap();
+        RecomputeComplete();
+    }
+
+    private void BuildCageMap()
+    {
+        var cages = _game!.Puzzle.Cages.OrderBy(c => c.Id).ToList();
+        for (int i = 0; i < cages.Count; i++)
+        {
+            var cage = cages[i];
+            byte minR = 9, minC = 9;
+            foreach (var cc in cage.Cells)
+            {
+                _cellToCageId[(cc.RowIdx, cc.ColIdx)] = cage.Id;
+                _cellToCageColor[(cc.RowIdx, cc.ColIdx)] = i % 6;
+                _cellToCageSum[(cc.RowIdx, cc.ColIdx)] = cage.Sum;
+                if (cc.RowIdx < minR || (cc.RowIdx == minR && cc.ColIdx < minC))
+                { minR = cc.RowIdx; minC = cc.ColIdx; }
+            }
+            _cageStartCells.Add((minR, minC));
+        }
+    }
+
+    private void BuildCellMap()
+    {
+        _cells.Clear();
+        for (byte r = 0; r < 9; r++)
+        for (byte c = 0; c < 9; c++)
+            _cells[(r, c)] = new CellState();
+
+        foreach (var gc in _game!.Cells)
+            _cells[(gc.RowIdx, gc.ColIdx)] = new CellState { Value = gc.CellValue };
+
+        foreach (var pm in _game.PencilMarks)
+            _cells[(pm.RowIdx, pm.ColIdx)].PencilMarks.Add(pm.MarkValue);
+    }
+
+    private CellState GetCell(byte r, byte c) => _cells[(r, c)];
+
+    private void SelectCell(byte r, byte c) => _activeCell = (r, c);
+    private void TogglePencilMode() => _pencilMode = !_pencilMode;
+
+    private async Task InputNumberAsync(byte n)
+    {
+        if (_activeCell is null || _game is null) return;
+        var (r, c) = _activeCell.Value;
+        ClearMessage();
+
+        if (_pencilMode)
+            await GameSvc.TogglePencilMarkAsync(_game.Id, r, c, n);
+        else
+            await GameSvc.SetCellValueAsync(_game.Id, r, c, n);
+
+        await ReloadAsync();
+    }
+
+    private async Task EraseActiveAsync()
+    {
+        if (_activeCell is null || _game is null) return;
+        var (r, c) = _activeCell.Value;
+        ClearMessage();
+        await GameSvc.SetCellValueAsync(_game.Id, r, c, null);
+        await ReloadAsync();
+    }
+
+    private async Task HintAsync()
+    {
+        if (_game is null) return;
+        ClearMessage();
+        try
+        {
+            var hint = await HintSvc.GetHintAsync(_game.Id);
+            _message = $"💡 Hint: Zelle ({hint.Row},{hint.Col}) = {hint.Value} (Strategy: {hint.Strategy})";
+            _messageIsError = false;
+            _activeCell = (hint.Row, hint.Col);
+            await ReloadAsync();
+        }
+        catch (Exception ex) { _message = $"Hint nicht verfügbar: {ex.Message}"; _messageIsError = true; }
+    }
+
+    private async Task PauseToggleAsync()
+    {
+        if (_game is null) return;
+        if (_isPaused) await ResumeAsync();
+        else { await GameSvc.PauseAsync(_game.Id); _isPaused = true; await ReloadAsync(); }
+    }
+
+    private async Task ResumeAsync()
+    {
+        if (_game is null) return;
+        await GameSvc.ResumeAsync(_game.Id);
+        _isPaused = false;
+        await ReloadAsync();
+    }
+
+    private async Task CheckAsync()
+    {
+        if (_game is null) return;
+        ClearMessage();
+        var result = await GameSvc.CheckSolutionAsync(_game.Id);
+        if (result.IsCorrect)
+        {
+            int score = await GameSvc.CompleteGameAsync(_game.Id);
+            _message = $"🎉 Geschafft! Score: {score}";
+            _messageIsError = false;
+            _isComplete = false;
+            await Task.Delay(1500);
+            Nav.NavigateTo("/highscore");
+        }
+        else
+        {
+            _message = result.FailReason switch
+            {
+                CheckFailReason.SumMismatch => "Lösung falsch: Summe der Zellen ≠ 405.",
+                CheckFailReason.Incomplete => "Bitte zuerst alle Felder ausfüllen.",
+                CheckFailReason.RowDuplicate => "Lösung falsch: Doppelte Zahl in einer Reihe.",
+                CheckFailReason.ColumnDuplicate => "Lösung falsch: Doppelte Zahl in einer Spalte.",
+                CheckFailReason.NonetDuplicate => "Lösung falsch: Doppelte Zahl in einem 3×3-Block.",
+                CheckFailReason.CageSumMismatch => "Lösung falsch: Eine Cage-Summe stimmt nicht.",
+                CheckFailReason.CageDuplicate => "Lösung falsch: Doppelte Zahl innerhalb einer Cage.",
+                _ => "Lösung ist nicht korrekt."
+            };
+            _messageIsError = true;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        if (_game is null) return;
+        _game = await Db.Games
+            .Include(g => g.Cells)
+            .Include(g => g.PencilMarks)
+            .Include(g => g.Puzzle).ThenInclude(p => p.CreatedBy)
+            .Include(g => g.Puzzle).ThenInclude(p => p.Cages).ThenInclude(c => c.Cells)
+            .FirstOrDefaultAsync(g => g.Id == _game.Id);
+        if (_game is null) return;
+        BuildCellMap();
+        RecomputeComplete();
+    }
+
+    private void RecomputeComplete()
+    {
+        _isComplete = _cells.Values.All(s => s.Value.HasValue);
+    }
+
+    private void ClearMessage() { _message = null; _messageIsError = false; }
+
+    private string FormatElapsed()
+    {
+        if (_game is null) return "--:--";
+        var elapsed = TimeSpan.FromSeconds(Math.Max(0,
+            (int)(DateTime.UtcNow - _game.StartTime).TotalSeconds - _game.TotalPausedSeconds));
+        return $"{(int)elapsed.TotalMinutes:D2}:{elapsed.Seconds:D2}";
+    }
+
+    private string GetBorderClass(byte r, byte c)
+    {
+        var sb = new System.Text.StringBuilder();
+        if (r == 2 || r == 5) sb.Append("border-bottom-thick ");
+        if (c == 2 || c == 5) sb.Append("border-right-thick ");
+        // cage boundary: rechts unterschiedlicher cage
+        if (c < 8 && _cellToCageId.TryGetValue(((byte)r, (byte)(c + 1)), out var rcid) && _cellToCageId[((byte)r, c)] != rcid)
+            sb.Append("border-right-cage ");
+        if (r < 8 && _cellToCageId.TryGetValue(((byte)(r + 1), (byte)c), out var bcid) && _cellToCageId[((byte)r, c)] != bcid)
+            sb.Append("border-bottom-cage ");
+        return sb.ToString().TrimEnd();
+    }
+}

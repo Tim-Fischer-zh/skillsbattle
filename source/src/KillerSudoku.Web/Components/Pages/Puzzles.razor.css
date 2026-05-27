@@ -1,0 +1,209 @@
+/* Puzzles list page (S4) */
+
+.puzzles {
+    padding: 48px 0;
+}
+
+.puzzles__head {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.puzzles__head h1 {
+    font-size: 32px;
+    margin-bottom: 4px;
+}
+
+.puzzles__subtitle {
+    color: #64748b;
+    margin: 0;
+}
+
+.puzzles__toolbar {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.filter-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.filter-pill {
+    background: transparent;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 120ms ease;
+    font-family: inherit;
+}
+
+.filter-pill:hover {
+    border-color: #cbd5e1;
+    color: #0f172a;
+}
+
+.filter-pill--active {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #ffffff;
+}
+
+.filter-pill__count {
+    background: rgba(15, 23, 42, 0.08);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.filter-pill--active .filter-pill__count {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+
+/* Puzzle grid */
+.puzzle-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+
+.puzzle-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    transition: transform 200ms ease, box-shadow 200ms ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.puzzle-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+.puzzle-card__preview {
+    background: #f1f5f9;
+    aspect-ratio: 16 / 9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.puzzle-card__preview-grid {
+    width: 90px;
+    height: 90px;
+    background:
+        linear-gradient(#cbd5e1, #cbd5e1) 0 0 / 100% 1px no-repeat,
+        linear-gradient(#cbd5e1, #cbd5e1) 0 33% / 100% 1px no-repeat,
+        linear-gradient(#cbd5e1, #cbd5e1) 0 66% / 100% 1px no-repeat,
+        linear-gradient(#cbd5e1, #cbd5e1) 0 100% / 100% 1px no-repeat,
+        linear-gradient(#cbd5e1, #cbd5e1) 0 0 / 1px 100% no-repeat,
+        linear-gradient(#cbd5e1, #cbd5e1) 33% 0 / 1px 100% no-repeat,
+        linear-gradient(#cbd5e1, #cbd5e1) 66% 0 / 1px 100% no-repeat,
+        linear-gradient(#cbd5e1, #cbd5e1) 100% 0 / 1px 100% no-repeat,
+        #ffffff;
+    border: 1px solid #94a3b8;
+}
+
+.puzzle-card__body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+}
+
+.puzzle-card__top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.puzzle-card__date {
+    font-size: 12px;
+    color: #64748b;
+}
+
+.puzzle-card__creator,
+.puzzle-card__score {
+    margin: 0;
+    font-size: 14px;
+    color: #475569;
+}
+
+.puzzle-card__creator strong {
+    color: #0f172a;
+}
+
+.puzzle-card__cta {
+    margin-top: auto;
+    align-self: flex-start;
+}
+
+/* Difficulty Badge */
+.difficulty-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 28px;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.difficulty-1 { background: #16a34a; }
+.difficulty-2 { background: #d97706; }
+.difficulty-3 { background: #dc2626; }
+
+/* Pagination */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    margin-top: 32px;
+}
+
+.pagination__info {
+    color: #64748b;
+    font-size: 14px;
+}
+
+.puzzles__empty {
+    background: #ffffff;
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 48px 24px;
+    text-align: center;
+    color: #64748b;
+}
+
+@media (max-width: 900px) {
+    .puzzle-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 600px) {
+    .puzzle-grid { grid-template-columns: 1fr; }
+}

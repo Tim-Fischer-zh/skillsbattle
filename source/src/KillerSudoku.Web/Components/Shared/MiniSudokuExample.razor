@@ -1,0 +1,112 @@
+@*
+    MiniSudokuExample
+    -----------------
+    Static, non-interactive 9×9 Killer-Sudoku visual.
+    Used as eye-catcher in Home/Rules (UC01) and for component test T003.
+
+    Renders 9×9 cells with cage pastel-backgrounds, dashed cage borders,
+    thick 3×3-nonet borders, and `.cage-sum` element in the top-left of each
+    cage (value 1..45 — AC01.2 + T003). Total sum of cage-sums = 405.
+*@
+
+<div class="mini-sudoku" role="img" aria-label="Killer Sudoku Beispiel-Grid 9 mal 9">
+    @for (var r = 0; r < Size; r++)
+    {
+        for (var c = 0; c < Size; c++)
+        {
+            var cageId = _cageMap[r, c];
+            var value = _values[r, c];
+            var classes = BuildCellClasses(r, c, cageId);
+            <div class="mini-sudoku__cell @classes mini-sudoku__cell--cage-@(cageId % 6)"
+                 data-row="@r"
+                 data-col="@c"
+                 data-cage="@cageId">
+                @if (IsCageAnchor(r, c, cageId))
+                {
+                    <span class="cage-sum">@_cageSums[cageId]</span>
+                }
+                @if (ShowValues && value > 0)
+                {
+                    <span class="mini-sudoku__value">@value</span>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    /// <summary>9×9 grid size (real Killer-Sudoku).</summary>
+    private const int Size = 9;
+
+    /// <summary>Show solved values on the demo grid (default: true for visual richness).</summary>
+    [Parameter] public bool ShowValues { get; set; } = true;
+
+    // 26 cages, Σ = 405, taken from the canonical mockup layout (S6 Play-Puzzle reference).
+    private static readonly int[,] _cageMap =
+    {
+        { 1, 1, 2, 2, 3, 3, 4, 4, 4 },
+        { 1, 5, 5, 6, 7, 7, 8, 8, 8 },
+        { 9, 9, 9, 6,10,10,10,10,10 },
+        { 11,11,12,12,12,13,13,13,13 },
+        { 11,11,14,14,14,14,15,15,15 },
+        { 16,16,17,17,17,18,18,18,18 },
+        { 19,19,20,20,21,21,21,22,22 },
+        { 19,19,20,20,23,23,23,22,22 },
+        { 24,24,24,25,25,25,26,26,26 },
+    };
+
+    private static readonly IReadOnlyDictionary<int, int> _cageSums = new Dictionary<int, int>
+    {
+        {  1, 12 }, {  2, 13 }, {  3,  9 }, {  4, 18 },
+        {  5, 10 }, {  6, 14 }, {  7, 18 }, {  8, 15 },
+        {  9, 17 }, { 10, 20 },
+        { 11, 17 }, { 12, 17 }, { 13, 18 }, { 14, 22 }, { 15, 15 },
+        { 16, 10 }, { 17, 15 }, { 18, 22 },
+        { 19, 22 }, { 20, 16 }, { 21, 13 }, { 22, 20 }, { 23, 14 },
+        { 24, 15 }, { 25, 12 }, { 26, 11 },
+    };
+
+    // Sparse demo values (12 hand-picked Killer-Sudoku-like givens, no row/col duplicates)
+    private static readonly int[,] _values =
+    {
+        { 0, 8, 0, 0, 5, 0, 0, 0, 0 },
+        { 0, 0, 0, 7, 0, 0, 2, 0, 0 },
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+        { 6, 0, 0, 0, 9, 0, 0, 0, 0 },
+        { 0, 0, 0, 0, 4, 0, 0, 0, 0 },
+        { 0, 0, 0, 8, 0, 0, 0, 5, 0 },
+        { 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+        { 0, 0, 3, 0, 0, 6, 0, 0, 0 },
+        { 0, 0, 0, 0, 0, 0, 0, 0, 9 },
+    };
+
+    private static bool IsCageAnchor(int row, int col, int cageId)
+    {
+        // Anchor = top-left cell of the cage (smallest (row, col) with this cage id).
+        for (var r = 0; r <= row; r++)
+        {
+            var maxC = (r == row) ? col - 1 : Size - 1;
+            for (var c = 0; c <= maxC; c++)
+            {
+                if (_cageMap[r, c] == cageId) return false;
+            }
+        }
+        return true;
+    }
+
+    private static string BuildCellClasses(int row, int col, int cageId)
+    {
+        var parts = new List<string>();
+
+        if (row == 0 || _cageMap[row - 1, col] != cageId) parts.Add("cage-edge-top");
+        if (row == Size - 1 || _cageMap[row + 1, col] != cageId) parts.Add("cage-edge-bottom");
+        if (col == 0 || _cageMap[row, col - 1] != cageId) parts.Add("cage-edge-left");
+        if (col == Size - 1 || _cageMap[row, col + 1] != cageId) parts.Add("cage-edge-right");
+
+        // Thick separator between 3×3 nonets (every 3rd column/row, not on outer edge)
+        if (row % 3 == 0 && row > 0) parts.Add("nonet-top");
+        if (col % 3 == 0 && col > 0) parts.Add("nonet-left");
+
+        return string.Join(' ', parts);
+    }
+}

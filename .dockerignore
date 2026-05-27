@@ -1,0 +1,46 @@
+# Repo-Root als Build-Context: nur source/, db/sudoku.sql und docker-entrypoint.sh
+# müssen in den Build. Alles andere ausschliessen.
+
+# Build artefacts
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+# Tests excluded from runtime image
+source/tests/
+
+# Docs / Submission / Assets (nicht in Build-Context)
+docs/
+AppDev_Fischer_Tim/
+examples/
+.skillsbattle/
+*.pdf
+*.png
+
+# IDE / OS
+.vs/
+.vscode/
+.idea/
+.DS_Store
+
+# User-Settings
+*.user
+*.suo
+
+# Local dev DB files
+*.mdf
+*.ldf
+
+# Coverage / TestResults
+TestResults/
+coverage/
+*.cobertura.xml
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# This file
+.dockerignore

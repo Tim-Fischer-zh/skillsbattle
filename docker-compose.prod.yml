@@ -1,0 +1,34 @@
+# =============================================================================
+# Production compose for the VPS deployment.
+# - Pulls pre-built image from GHCR (no local build on the VPS)
+# - Binds host port 80 → container port 8080, which is what the cloudflared
+#   tunnel forwards to (Cloudflare terminates TLS, plain HTTP to localhost:80)
+# - SQL Server port is intentionally NOT published (DB is internal)
+# - Restart-on-failure for unattended operation
+# =============================================================================
+services:
+  killersudoku:
+    image: ghcr.io/tim-fischer-zh/killer-sudoku:latest
+    container_name: killersudoku
+    # No pull_policy — image is built locally on the self-hosted runner
+    # and we want compose to use that local copy, not re-pull from GHCR.
+    ports:
+      - "127.0.0.1:80:8080"   # only loopback — cloudflared lives on the same host
+    environment:
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD must be set in .env}
+      MSSQL_PID: Express
+      ACCEPT_EULA: "Y"
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Production
+    volumes:
+      - mssql-data:/var/opt/mssql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 4
+
+volumes:
+  mssql-data:

@@ -1,0 +1,155 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Killer Sudoku" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e5]: ♛
+        - generic [ref=e6]: Killer Sudoku
+      - navigation [ref=e7]:
+        - link "Puzzles" [ref=e8] [cursor=pointer]:
+          - /url: /puzzles
+        - link "Neues Puzzle" [ref=e9] [cursor=pointer]:
+          - /url: /puzzles/new
+        - link "Highscore" [ref=e10] [cursor=pointer]:
+          - /url: /highscore
+        - generic "testuser" [ref=e11]:
+          - generic [ref=e12]: T
+          - generic [ref=e13]: testuser
+        - button "Logout" [ref=e15] [cursor=pointer]
+  - main [ref=e16]:
+    - generic [ref=e178]:
+      - generic [ref=e179]:
+        - heading "Neues Puzzle anlegen" [level=1] [ref=e180]
+        - paragraph [ref=e181]: Definiere Cages und Soll-Summen. Jede der 81 Zellen muss zu genau einem Cage gehören. Σ aller Cage-Summen = 405 (= 9 × 45).
+      - generic [ref=e182]:
+        - generic [ref=e183]:
+          - grid "9 mal 9 Editor-Grid" [ref=e184]:
+            - row [ref=e185]:
+              - gridcell [ref=e186] [cursor=pointer]
+              - gridcell [ref=e187] [cursor=pointer]
+              - gridcell [ref=e188] [cursor=pointer]
+              - gridcell [ref=e189] [cursor=pointer]
+              - gridcell [ref=e190] [cursor=pointer]
+              - gridcell [ref=e191] [cursor=pointer]
+              - gridcell [ref=e192] [cursor=pointer]
+              - gridcell [ref=e193] [cursor=pointer]
+              - gridcell [ref=e194] [cursor=pointer]
+            - row [ref=e195]:
+              - gridcell [ref=e196] [cursor=pointer]
+              - gridcell [ref=e197] [cursor=pointer]
+              - gridcell [ref=e198] [cursor=pointer]
+              - gridcell [ref=e199] [cursor=pointer]
+              - gridcell [ref=e200] [cursor=pointer]
+              - gridcell [ref=e201] [cursor=pointer]
+              - gridcell [ref=e202] [cursor=pointer]
+              - gridcell [ref=e203] [cursor=pointer]
+              - gridcell [ref=e204] [cursor=pointer]
+            - row [ref=e205]:
+              - gridcell [ref=e206] [cursor=pointer]
+              - gridcell [ref=e207] [cursor=pointer]
+              - gridcell [ref=e208] [cursor=pointer]
+              - gridcell [ref=e209] [cursor=pointer]
+              - gridcell [ref=e210] [cursor=pointer]
+              - gridcell [ref=e211] [cursor=pointer]
+              - gridcell [ref=e212] [cursor=pointer]
+              - gridcell [ref=e213] [cursor=pointer]
+              - gridcell [ref=e214] [cursor=pointer]
+            - row [ref=e215]:
+              - gridcell [ref=e216] [cursor=pointer]
+              - gridcell [ref=e217] [cursor=pointer]
+              - gridcell [ref=e218] [cursor=pointer]
+              - gridcell [ref=e219] [cursor=pointer]
+              - gridcell [ref=e220] [cursor=pointer]
+              - gridcell [ref=e221] [cursor=pointer]
+              - gridcell [ref=e222] [cursor=pointer]
+              - gridcell [ref=e223] [cursor=pointer]
+              - gridcell [ref=e224] [cursor=pointer]
+            - row [ref=e225]:
+              - gridcell [ref=e226] [cursor=pointer]
+              - gridcell [ref=e227] [cursor=pointer]
+              - gridcell [ref=e228] [cursor=pointer]
+              - gridcell [ref=e229] [cursor=pointer]
+              - gridcell [ref=e230] [cursor=pointer]
+              - gridcell [ref=e231] [cursor=pointer]
+              - gridcell [ref=e232] [cursor=pointer]
+              - gridcell [ref=e233] [cursor=pointer]
+              - gridcell [ref=e234] [cursor=pointer]
+            - row [ref=e235]:
+              - gridcell [ref=e236] [cursor=pointer]
+              - gridcell [ref=e237] [cursor=pointer]
+              - gridcell [ref=e238] [cursor=pointer]
+              - gridcell [ref=e239] [cursor=pointer]
+              - gridcell [ref=e240] [cursor=pointer]
+              - gridcell [ref=e241] [cursor=pointer]
+              - gridcell [ref=e242] [cursor=pointer]
+              - gridcell [ref=e243] [cursor=pointer]
+              - gridcell [ref=e244] [cursor=pointer]
+            - row [ref=e245]:
+              - gridcell [ref=e246] [cursor=pointer]
+              - gridcell [ref=e247] [cursor=pointer]
+              - gridcell [ref=e248] [cursor=pointer]
+              - gridcell [ref=e249] [cursor=pointer]
+              - gridcell [ref=e250] [cursor=pointer]
+              - gridcell [ref=e251] [cursor=pointer]
+              - gridcell [ref=e252] [cursor=pointer]
+              - gridcell [ref=e253] [cursor=pointer]
+              - gridcell [ref=e254] [cursor=pointer]
+            - row [ref=e255]:
+              - gridcell [ref=e256] [cursor=pointer]
+              - gridcell [ref=e257] [cursor=pointer]
+              - gridcell [ref=e258] [cursor=pointer]
+              - gridcell [ref=e259] [cursor=pointer]
+              - gridcell [ref=e260] [cursor=pointer]
+              - gridcell [ref=e261] [cursor=pointer]
+              - gridcell [ref=e262] [cursor=pointer]
+              - gridcell [ref=e263] [cursor=pointer]
+              - gridcell [ref=e264] [cursor=pointer]
+            - row [ref=e265]:
+              - gridcell [ref=e266] [cursor=pointer]
+              - gridcell [ref=e267] [cursor=pointer]
+              - gridcell [ref=e268] [cursor=pointer]
+              - gridcell [ref=e269] [cursor=pointer]
+              - gridcell [ref=e270] [cursor=pointer]
+              - gridcell [ref=e271] [cursor=pointer]
+              - gridcell [ref=e272] [cursor=pointer]
+              - gridcell [ref=e273] [cursor=pointer]
+              - gridcell [ref=e274] [cursor=pointer]
+          - generic [ref=e275]:
+            - button "+ Neuer Cage" [disabled] [ref=e276]
+            - button "✓ Cage abschließen" [disabled] [ref=e277]
+            - button "🗑 Aktive Cage löschen" [disabled] [ref=e278]
+        - complementary [ref=e151]:
+          - generic [ref=e152]:
+            - generic [ref=e153]: Schwierigkeit
+            - generic [ref=e154]:
+              - button "1" [disabled] [ref=e155] [cursor=pointer]
+              - button "2" [disabled] [ref=e156] [cursor=pointer]
+              - button "3" [disabled] [ref=e157] [cursor=pointer]
+            - button "🎲 Generiere…" [disabled] [ref=e279]
+            - paragraph [ref=e159]: Erzeugt eine zufällige, eindeutig lösbare Cage-Aufteilung für die gewählte Schwierigkeit. Du kannst danach noch Anpassungen machen, bevor du speicherst.
+          - generic [ref=e160]:
+            - generic [ref=e161]: Status
+            - generic [ref=e162]:
+              - generic [ref=e163]: Zellen zugeordnet
+              - strong [ref=e164]: 0 / 81
+            - generic [ref=e165]:
+              - generic [ref=e166]: Cages definiert
+              - strong [ref=e167]: "0"
+            - generic [ref=e168]:
+              - generic [ref=e169]: Σ Cage-Summen
+              - strong [ref=e170]: 0 / 405
+          - generic [ref=e171]:
+            - generic [ref=e172]: Definierte Cages
+            - paragraph [ref=e173]: Noch kein Cage. Klicke „+ Neuer Cage", dann markiere zusammenhängende Zellen.
+          - generic [ref=e174]:
+            - button "Puzzle prüfen & speichern" [disabled] [ref=e175]
+            - paragraph [ref=e176]: Aktiv, sobald alle 81 Zellen zugeordnet sind UND Σ = 405 ist (= eindeutiges Killer-Sudoku möglich).
+  - contentinfo [ref=e145]:
+    - generic [ref=e146]:
+      - generic [ref=e147]: © 2026 Killer Sudoku
+      - generic [ref=e148]: .NET 10 · Blazor Server · MS-SQL
+  - generic [ref=e149]:
+    - text: An unhandled error has occurred.
+    - link "Reload" [ref=e150] [cursor=pointer]:
+      - /url: .
+    - text: 🗙

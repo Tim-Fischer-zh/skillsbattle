@@ -1,0 +1,125 @@
+/* Home / Rules page (S1) */
+
+.hero {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+    padding: 64px 0 48px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.hero__inner {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 48px;
+    align-items: center;
+}
+
+.hero__copy h1 {
+    margin: 0 0 12px 0;
+    font-size: 48px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.hero__subtitle {
+    color: #64748b;
+    font-size: 20px;
+    margin: 0 0 32px 0;
+}
+
+.hero__ctas {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.hero__art {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Rules section */
+.rules {
+    padding: 64px 0;
+    background: #ffffff;
+}
+
+.rules__intro {
+    color: #64748b;
+    max-width: 640px;
+    margin-bottom: 32px;
+}
+
+.rules__grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+}
+
+.rule-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 24px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.rule-card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateY(-2px);
+}
+
+.rule-card__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    background: #eff6ff;
+    color: #2563eb;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 18px;
+}
+
+.rule-card h3 {
+    margin: 4px 0 4px 0;
+    font-size: 18px;
+}
+
+.rule-card__rule {
+    color: #475569;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Example section */
+.example {
+    padding: 48px 0 80px;
+    background: #f8fafc;
+}
+
+.example__intro {
+    color: #64748b;
+    max-width: 640px;
+    margin-bottom: 24px;
+}
+
+.example__grid-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+}
+
+@media (max-width: 900px) {
+    .hero__inner { grid-template-columns: 1fr; }
+    .rules__grid { grid-template-columns: repeat(2, 1fr); }
+}

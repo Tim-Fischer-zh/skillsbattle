@@ -1,0 +1,77 @@
+@page "/"
+@using KillerSudoku.Web.Components.Shared
+
+<PageTitle>Killer Sudoku</PageTitle>
+
+<section class="hero">
+    <div class="container hero__inner">
+        <div class="hero__copy">
+            <h1>Killer Sudoku</h1>
+            <p class="hero__subtitle">Sudoku mit dem Kniff: Cage-Summen.</p>
+            <div class="hero__ctas">
+                <a class="btn btn-primary" href="/register">Account erstellen</a>
+                <a class="btn btn-outline" href="/login">Login</a>
+            </div>
+        </div>
+
+        <div class="hero__art">
+            <MiniSudokuExample ShowValues="false" />
+        </div>
+    </div>
+</section>
+
+<section class="rules">
+    <div class="container">
+        <h2>So wird gespielt</h2>
+        <p class="rules__intro">
+            Killer Sudoku kombiniert die klassischen Sudoku-Regeln mit zusätzlichen Cage-Summen.
+        </p>
+
+        <div class="rules__grid">
+            <article class="rule-card">
+                <div class="rule-card__icon" aria-hidden="true">1&ndash;9</div>
+                <h3>Zahlen 1&ndash;9</h3>
+                <p class="rule-card__rule">
+                    Each row, column, and nonet contains each number exactly once.
+                </p>
+            </article>
+
+            <article class="rule-card">
+                <div class="rule-card__icon" aria-hidden="true">&#8721;</div>
+                <h3>Cage-Summen</h3>
+                <p class="rule-card__rule">
+                    The sum of all numbers in a cage must match the small number printed in its corner.
+                </p>
+            </article>
+
+            <article class="rule-card">
+                <div class="rule-card__icon" aria-hidden="true">&#8800;</div>
+                <h3>Keine Doppel im Cage</h3>
+                <p class="rule-card__rule">
+                    No number appears more than once in a cage.
+                </p>
+            </article>
+
+            <article class="rule-card">
+                <div class="rule-card__icon" aria-hidden="true">&#10004;</div>
+                <h3>Eindeutige L&ouml;sung</h3>
+                <p class="rule-card__rule">
+                    The solution must be unique.
+                </p>
+            </article>
+        </div>
+    </div>
+</section>
+
+<section class="example">
+    <div class="container">
+        <h2>Beispiel</h2>
+        <p class="example__intro">
+            Ein kleines 4&times;4-Killer-Sudoku zeigt das Prinzip: gestrichelte Cage-Borders,
+            Cage-Summe in der oberen linken Ecke jeder Cage.
+        </p>
+        <div class="example__grid-wrap">
+            <MiniSudokuExample ShowValues="true" />
+        </div>
+    </div>
+</section>

@@ -1,0 +1,55 @@
+@inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+
+<header class="app-header">
+    <div class="app-header__inner">
+        <a class="app-header__logo" href="/">
+            <span class="app-header__crown" aria-hidden="true">&#9819;</span>
+            <span class="app-header__brand">Killer Sudoku</span>
+        </a>
+
+        <nav class="app-header__nav">
+            <AuthorizeView>
+                <Authorized>
+                    <NavLink class="app-header__link" href="/puzzles" Match="NavLinkMatch.Prefix">Puzzles</NavLink>
+                    <NavLink class="app-header__link" href="/puzzles/new" Match="NavLinkMatch.All">Neues Puzzle</NavLink>
+                    <NavLink class="app-header__link" href="/highscore" Match="NavLinkMatch.Prefix">Highscore</NavLink>
+                    <span class="app-header__user-pill" title="@context.User.Identity?.Name">
+                        <span class="app-header__avatar" aria-hidden="true">@GetInitial(context.User.Identity?.Name)</span>
+                        <span class="app-header__username">@context.User.Identity?.Name</span>
+                    </span>
+                    <form method="post" action="/logout" class="app-header__logout-form">
+                        <AntiforgeryToken />
+                        <button type="submit" class="btn btn-ghost">Logout</button>
+                    </form>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="app-header__link" href="/login">Login</a>
+                    <a class="btn btn-primary" href="/register">Register</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </nav>
+    </div>
+</header>
+
+<main class="app-main">
+    @Body
+</main>
+
+<footer class="app-footer">
+    <div class="container app-footer__inner">
+        <span>&copy; @DateTime.UtcNow.Year Killer Sudoku</span>
+        <span class="app-footer__stack">.NET 10 &middot; Blazor Server &middot; MS-SQL</span>
+    </div>
+</footer>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">&#128473;</span>
+</div>
+
+@code {
+    private static string GetInitial(string? name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : char.ToUpperInvariant(name[0]).ToString();
+}

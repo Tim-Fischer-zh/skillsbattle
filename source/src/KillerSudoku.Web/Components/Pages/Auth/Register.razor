@@ -1,0 +1,145 @@
+@page "/register"
+@layout KillerSudoku.Web.Components.Layout.MainLayout
+@using System.ComponentModel.DataAnnotations
+@using KillerSudoku.Data.Entities
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<AppUser> UserManager
+@inject SignInManager<AppUser> SignInManager
+@inject NavigationManager Nav
+
+<PageTitle>Account erstellen &middot; Killer Sudoku</PageTitle>
+
+<section class="auth">
+    <div class="auth__container">
+        <div class="auth-card" data-testid="register-card">
+            <h2>Account erstellen</h2>
+
+            @if (_errors.Count > 0)
+            {
+                <div class="auth-card__banner auth-card__banner--error" role="alert" data-testid="register-error-banner">
+                    <ul>
+                        @foreach (var err in _errors)
+                        {
+                            <li>@err</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <EditForm Model="Input" method="post" OnValidSubmit="HandleRegisterAsync" FormName="register" Enhance="false" data-testid="register-form">
+                <DataAnnotationsValidator />
+
+                <div class="form-field">
+                    <label for="register-username">Username</label>
+                    <InputText id="register-username"
+                               class="form-input"
+                               @bind-Value="Input.Username"
+                               autocomplete="username"
+                               data-testid="register-username" />
+                    <small class="form-helper">3&ndash;50 Zeichen, A&ndash;Z 0&ndash;9 _ -</small>
+                    <ValidationMessage For="() => Input.Username" class="form-error" />
+                </div>
+
+                <div class="form-field">
+                    <label for="register-email">Email</label>
+                    <InputText id="register-email"
+                               type="email"
+                               class="form-input"
+                               @bind-Value="Input.Email"
+                               autocomplete="email"
+                               data-testid="register-email" />
+                    <ValidationMessage For="() => Input.Email" class="form-error" />
+                </div>
+
+                <div class="form-field">
+                    <label for="register-password">Passwort</label>
+                    <InputText id="register-password"
+                               type="password"
+                               class="form-input"
+                               @bind-Value="Input.Password"
+                               autocomplete="new-password"
+                               data-testid="register-password" />
+                    <small class="form-helper">min 8 Zeichen, Buchstaben + Zahlen</small>
+                    <ValidationMessage For="() => Input.Password" class="form-error" />
+                </div>
+
+                <div class="form-field">
+                    <label for="register-password-confirm">Passwort bestätigen</label>
+                    <InputText id="register-password-confirm"
+                               type="password"
+                               class="form-input"
+                               @bind-Value="Input.PasswordConfirm"
+                               autocomplete="new-password"
+                               data-testid="register-password-confirm" />
+                    <ValidationMessage For="() => Input.PasswordConfirm" class="form-error" />
+                </div>
+
+                <button type="submit" class="btn btn-primary auth-card__submit" data-testid="register-submit">
+                    Account erstellen
+                </button>
+            </EditForm>
+
+            <p class="auth-card__link">
+                Schon Account? <a href="/login">&rarr; Login</a>
+            </p>
+        </div>
+    </div>
+</section>
+
+@code {
+    [SupplyParameterFromForm(FormName = "register")]
+    public RegisterInput Input { get; set; } = null!;
+
+    private List<string> _errors = new();
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task HandleRegisterAsync()
+    {
+        _errors = new List<string>();
+
+        var username = (Input.Username ?? string.Empty).Trim();
+        var email = (Input.Email ?? string.Empty).Trim().ToLowerInvariant();
+
+        var user = new AppUser
+        {
+            UserName = username,
+            Email = email
+        };
+
+        var result = await UserManager.CreateAsync(user, Input.Password ?? string.Empty);
+        if (!result.Succeeded)
+        {
+            _errors = result.Errors.Select(e => e.Description).ToList();
+            return;
+        }
+
+        await SignInManager.SignInAsync(user, isPersistent: false);
+        Nav.NavigateTo("/puzzles");
+    }
+
+    public sealed class RegisterInput
+    {
+        [Required(ErrorMessage = "Username ist erforderlich.")]
+        [StringLength(50, MinimumLength = 3,
+            ErrorMessage = "Username muss 3–50 Zeichen lang sein und nur Buchstaben, Zahlen, _ oder - enthalten.")]
+        [RegularExpression("^[A-Za-z0-9_-]+$",
+            ErrorMessage = "Username muss 3–50 Zeichen lang sein und nur Buchstaben, Zahlen, _ oder - enthalten.")]
+        public string? Username { get; set; }
+
+        [Required(ErrorMessage = "Email ist erforderlich.")]
+        [RegularExpression(@"^[^\s@]+@[^\s@]+\.[^\s@]+$",
+            ErrorMessage = "Bitte gib eine gültige Email-Adresse ein.")]
+        public string? Email { get; set; }
+
+        [Required(ErrorMessage = "Passwort ist erforderlich.")]
+        [MinLength(8, ErrorMessage = "Passwort muss mindestens 8 Zeichen lang sein und Buchstaben + Zahlen enthalten.")]
+        [RegularExpression(@"^(?=.*[A-Za-z])(?=.*\d).{8,}$",
+            ErrorMessage = "Passwort muss mindestens 8 Zeichen lang sein und Buchstaben + Zahlen enthalten.")]
+        public string? Password { get; set; }
+
+        [Required(ErrorMessage = "Bitte bestätige das Passwort.")]
+        [Compare(nameof(Password), ErrorMessage = "Die Passwörter stimmen nicht überein.")]
+        public string? PasswordConfirm { get; set; }
+    }
+}

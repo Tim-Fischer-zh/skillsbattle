@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/KillerSudoku.Core/KillerSudoku.Core.csproj" />
+    <Project Path="src/KillerSudoku.Data/KillerSudoku.Data.csproj" />
+    <Project Path="src/KillerSudoku.Web/KillerSudoku.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/KillerSudoku.ComponentTests/KillerSudoku.ComponentTests.csproj" />
+    <Project Path="tests/KillerSudoku.E2ETests/KillerSudoku.E2ETests.csproj" />
+    <Project Path="tests/KillerSudoku.IntegrationTests/KillerSudoku.IntegrationTests.csproj" />
+    <Project Path="tests/KillerSudoku.UnitTests/KillerSudoku.UnitTests.csproj" />
+  </Folder>
+</Solution>

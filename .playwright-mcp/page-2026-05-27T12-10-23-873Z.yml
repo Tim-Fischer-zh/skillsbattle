@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - link "Killer Sudoku" [ref=e4] [cursor=pointer]:
+        - /url: /
+        - generic [ref=e5]: ♛
+        - generic [ref=e6]: Killer Sudoku
+      - navigation [ref=e7]:
+        - link "Login" [ref=e8] [cursor=pointer]:
+          - /url: /login
+        - link "Register" [ref=e9] [cursor=pointer]:
+          - /url: /register
+  - main [ref=e10]:
+    - generic [ref=e13]:
+      - heading "Account erstellen" [level=2] [ref=e14]
+      - generic [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: Username
+          - textbox "Username" [ref=e18]
+          - generic [ref=e19]: 3–50 Zeichen, A–Z 0–9 _ -
+        - generic [ref=e20]:
+          - generic [ref=e21]: Email
+          - textbox "Email" [ref=e22]
+        - generic [ref=e23]:
+          - generic [ref=e24]: Passwort
+          - textbox "Passwort" [ref=e25]
+          - generic [ref=e26]: min 8 Zeichen, Buchstaben + Zahlen
+        - generic [ref=e27]:
+          - generic [ref=e28]: Passwort bestätigen
+          - textbox "Passwort bestätigen" [ref=e29]
+        - button "Account erstellen" [ref=e30] [cursor=pointer]
+      - paragraph [ref=e31]:
+        - text: Schon Account?
+        - link "→ Login" [ref=e32] [cursor=pointer]:
+          - /url: /login
+  - contentinfo [ref=e33]:
+    - generic [ref=e34]:
+      - generic [ref=e35]: © 2026 Killer Sudoku
+      - generic [ref=e36]: .NET 10 · Blazor Server · MS-SQL
+  - generic [ref=e37]:
+    - text: An unhandled error has occurred.
+    - link "Reload" [ref=e38] [cursor=pointer]:
+      - /url: .
+    - text: 🗙

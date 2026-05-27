@@ -1,0 +1,2 @@
+[      53ms] [INFO] [2026-05-27T12:22:46.394Z] Information: Normalizing '_blazor' to 'http://localhost:8080/_blazor'. @ http://localhost:8080/_framework/blazor.web.ej96puwv3k.js:0
+[      59ms] [INFO] [2026-05-27T12:22:46.400Z] Information: WebSocket connected to ws://localhost:8080/_blazor?id=lTXiKGHlZK82qChTPWL-xg. @ http://localhost:8080/_framework/blazor.web.ej96puwv3k.js:0

@@ -1,0 +1,67 @@
+.mini-sudoku {
+    display: grid;
+    grid-template-columns: repeat(9, 44px);
+    grid-template-rows: repeat(9, 44px);
+    gap: 0;
+    background: #ffffff;
+    border: 2px solid #0f172a;
+    border-radius: 4px;
+    padding: 4px;
+    box-shadow: 0 6px 24px rgba(15, 23, 42, 0.10);
+    width: fit-content;
+}
+
+.mini-sudoku__cell {
+    position: relative;
+    background: #ffffff;
+    border: 0.5px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+}
+
+/* Cage pastel backgrounds (rotation, 6 colors so adjacent cages differ visually) */
+.mini-sudoku__cell--cage-0 { background: #f1f5f9; }
+.mini-sudoku__cell--cage-1 { background: #fef3c7; }
+.mini-sudoku__cell--cage-2 { background: #dcfce7; }
+.mini-sudoku__cell--cage-3 { background: #fee2e2; }
+.mini-sudoku__cell--cage-4 { background: #dbeafe; }
+.mini-sudoku__cell--cage-5 { background: #f5d0fe; }
+
+/* Cage dashed borders (killer-specific) */
+.mini-sudoku__cell.cage-edge-top    { border-top:    1.5px dashed #475569; }
+.mini-sudoku__cell.cage-edge-bottom { border-bottom: 1.5px dashed #475569; }
+.mini-sudoku__cell.cage-edge-left   { border-left:   1.5px dashed #475569; }
+.mini-sudoku__cell.cage-edge-right  { border-right:  1.5px dashed #475569; }
+
+/* Thick nonet (3×3) separators */
+.mini-sudoku__cell.nonet-top  { border-top:  2.5px solid #0f172a; }
+.mini-sudoku__cell.nonet-left { border-left: 2.5px solid #0f172a; }
+
+.cage-sum {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: #2563eb;
+    line-height: 1;
+}
+
+.mini-sudoku__value {
+    line-height: 1;
+}
+
+@media (max-width: 768px) {
+    .mini-sudoku {
+        grid-template-columns: repeat(9, 32px);
+        grid-template-rows: repeat(9, 32px);
+    }
+    .mini-sudoku__cell { font-size: 14px; }
+    .cage-sum { font-size: 8px; }
+}

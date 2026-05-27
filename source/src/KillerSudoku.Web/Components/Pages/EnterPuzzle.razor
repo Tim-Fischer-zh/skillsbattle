@@ -1,0 +1,457 @@
+@page "/puzzles/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using KillerSudoku.Core.Abstractions
+@using KillerSudoku.Core.Models
+@using KillerSudoku.Data.Entities
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@inject IPuzzleService PuzzleSvc
+@inject IPuzzleGenerator Generator
+@inject AuthenticationStateProvider AuthState
+@inject UserManager<AppUser> UserMgr
+@inject NavigationManager Nav
+
+<PageTitle>Neues Puzzle &middot; Killer Sudoku</PageTitle>
+
+@if (_isGenerating)
+{
+    <div class="gen-overlay" role="alertdialog" aria-busy="true" aria-live="polite">
+        <div class="gen-overlay__card">
+            <div class="gen-overlay__spinner" aria-hidden="true"></div>
+            <h2 class="gen-overlay__title">Zufalls-Puzzle wird generiert</h2>
+            <p class="gen-overlay__sub">Difficulty @_difficulty &middot; löse und prüfe Eindeutigkeit&hellip;</p>
+            <p class="gen-overlay__hint">
+                @switch (_difficulty)
+                {
+                    case 1: <text>Üblich ~ 1–3 Sekunden.</text> break;
+                    case 2: <text>⚠ Kann 5–20 Sekunden dauern — bitte nicht neu laden.</text> break;
+                    case 3: <text>⚠ Kann bis zu 60 Sekunden dauern — bitte nicht neu laden.</text> break;
+                }
+            </p>
+        </div>
+    </div>
+}
+
+<section class="editor">
+    <div class="container">
+        <header class="editor__head">
+            <h1>Neues Puzzle anlegen</h1>
+            <p class="editor__sub">Definiere Cages und Soll-Summen. Jede der 81 Zellen muss zu genau einem Cage gehören. Σ aller Cage-Summen = 405 (= 9 × 45).</p>
+        </header>
+
+        <div class="editor__body">
+            <div class="editor__grid-col">
+                <div class="grid grid--editor" role="grid" aria-label="9 mal 9 Editor-Grid">
+                    @for (byte r = 0; r < 9; r++)
+                    {
+                        byte row = r;
+                        <div class="grid-row" role="row">
+                            @for (byte c = 0; c < 9; c++)
+                            {
+                                byte col = c;
+                                var key = (row, col);
+                                var cageIndex = _cellCage.TryGetValue(key, out var ci) ? ci : (int?)null;
+                                var color = cageIndex.HasValue
+                                    ? (_cageColors.TryGetValue(cageIndex.Value, out var colorIdx) ? colorIdx : 0).ToString()
+                                    : "none";
+                                var isActiveCage = _activeCageIdx.HasValue && cageIndex == _activeCageIdx;
+                                var isAnchor = cageIndex.HasValue && IsAnchorCell(cageIndex.Value, row, col);
+                                var cssClass =
+                                    $"grid-cell grid-cell--cage-{color} " +
+                                    (isActiveCage ? "grid-cell--active-cage " : "") +
+                                    GetBorderClass(row, col);
+
+                                <button type="button" class="@cssClass"
+                                        role="gridcell"
+                                        @onclick="@(() => ClickCellAsync(row, col))">
+                                    @if (isAnchor)
+                                    {
+                                        <span class="grid-cell__cage-sum">@_cages[cageIndex!.Value].Sum</span>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="editor__grid-actions">
+                    <button class="btn btn-primary" type="button" @onclick="StartNewCage"
+                            disabled="@IsBusy">+ Neuer Cage</button>
+                    <button class="btn btn-outline" type="button" @onclick="FinishActiveCage"
+                            disabled="@(!_activeCageIdx.HasValue || IsBusy)">✓ Cage abschließen</button>
+                    <button class="btn btn-outline" type="button" @onclick="DeleteActiveCage"
+                            disabled="@(!_activeCageIdx.HasValue || IsBusy)">🗑 Aktive Cage löschen</button>
+                </div>
+            </div>
+
+            <aside class="editor__sidebar">
+                <div class="editor__section">
+                    <span class="editor__label">Schwierigkeit</span>
+                    <div class="editor__diff">
+                        @foreach (var d in new byte[] { 1, 2, 3 })
+                        {
+                            var diff = d;
+                            <button type="button"
+                                    class="diff-pill @(_difficulty == diff ? "diff-pill--active" : "")"
+                                    @onclick="() => _difficulty = diff"
+                                    disabled="@IsBusy">@diff</button>
+                        }
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline btn-block editor__generate"
+                            @onclick="GenerateRandomAsync"
+                            disabled="@IsBusy">
+                        @(_isGenerating ? "🎲 Generiere…" : "🎲 Zufalls-Puzzle generieren")
+                    </button>
+                    <p class="editor__hint">
+                        Erzeugt eine zufällige, eindeutig lösbare Cage-Aufteilung für die gewählte Schwierigkeit.
+                        Du kannst danach noch Anpassungen machen, bevor du speicherst.
+                    </p>
+                    @if (_difficulty >= 2)
+                    {
+                        <p class="editor__warn">
+                            ⚠ Difficulty @_difficulty: Generierung kann
+                            @(_difficulty == 2 ? "5–20 Sekunden" : "bis zu 60 Sekunden")
+                            dauern (Solver verifiziert Eindeutigkeit).
+                        </p>
+                    }
+                </div>
+
+                <div class="editor__section">
+                    <span class="editor__label">Status</span>
+                    <div class="editor__stat">
+                        <span>Zellen zugeordnet</span>
+                        <strong class="@(CoveredCells == 81 ? "stat--ok" : "stat--warn")">@CoveredCells / 81</strong>
+                    </div>
+                    <div class="editor__stat">
+                        <span>Cages definiert</span>
+                        <strong>@NonEmptyCageCount</strong>
+                    </div>
+                    <div class="editor__stat">
+                        <span>Σ Cage-Summen</span>
+                        <strong class="@(TotalCageSum == 405 ? "stat--ok" : "stat--warn")">@TotalCageSum / 405</strong>
+                    </div>
+                </div>
+
+                <div class="editor__section editor__cages">
+                    <span class="editor__label">Definierte Cages</span>
+                    @if (_cages.Count == 0)
+                    {
+                        <p class="editor__empty">Noch kein Cage. Klicke „+ Neuer Cage", dann markiere zusammenhängende Zellen.</p>
+                    }
+                    else
+                    {
+                        @for (var i = 0; i < _cages.Count; i++)
+                        {
+                            var idx = i;
+                            var cage = _cages[idx];
+                            var isActive = _activeCageIdx == idx;
+                            <div class="cage-row @(isActive ? "cage-row--active" : "")"
+                                 @onclick="() => _activeCageIdx = idx">
+                                <span class="cage-row__name">Cage #@(idx + 1)</span>
+                                <input type="number" min="1" max="45"
+                                       class="cage-row__sum"
+                                       value="@cage.Sum"
+                                       @onchange="@(e => UpdateCageSum(idx, e.Value?.ToString()))" />
+                                <span class="cage-row__cells">@cage.Cells.Count Zellen</span>
+                                <button type="button" class="cage-row__del" @onclick="@(() => RemoveCage(idx))" @onclick:stopPropagation>🗑</button>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="editor__section editor__save">
+                    <button type="button"
+                            class="btn btn-success btn-block"
+                            disabled="@(!CanSave || IsBusy)"
+                            @onclick="SaveAsync">
+                        @(_isSaving ? "Wird geprüft…" : "Puzzle prüfen & speichern")
+                    </button>
+                    <p class="editor__hint">
+                        Aktiv, sobald alle 81 Zellen zugeordnet sind UND Σ = 405 ist (= eindeutiges Killer-Sudoku möglich).
+                    </p>
+
+                    @if (_saveMessage is not null)
+                    {
+                        <div class="editor__message editor__message--@(_saveSuccess ? "ok" : "err")">@_saveMessage</div>
+                    }
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+@code {
+    private const int ColorCount = 10;
+
+    private byte _difficulty = 2;
+    private readonly List<CageDraft> _cages = new();
+    private readonly Dictionary<(byte, byte), int> _cellCage = new();
+    private readonly Dictionary<int, int> _cageColors = new();
+    private int? _activeCageIdx;
+    private bool _isSaving;
+    private bool _isGenerating;
+    private bool IsBusy => _isSaving || _isGenerating;
+    private string? _saveMessage;
+    private bool _saveSuccess;
+
+    /// <summary>
+    /// Greedy 4-coloring (Welsh-Powell): assigns colors 0..ColorCount-1 so that no two
+    /// orthogonally-adjacent cages share a color. Called after every mutation of
+    /// _cages / _cellCage so the editor stays visually unambiguous.
+    /// </summary>
+    private void RecomputeCageColors()
+    {
+        _cageColors.Clear();
+        int n = _cages.Count;
+        if (n == 0) return;
+
+        // Build adjacency (orthogonal cell neighbours that belong to different cages)
+        var adj = new HashSet<int>[n];
+        for (int i = 0; i < n; i++) adj[i] = new HashSet<int>();
+
+        foreach (var ((r, c), cageIdx) in _cellCage)
+        {
+            void Link(int nr, int nc)
+            {
+                if (_cellCage.TryGetValue(((byte)nr, (byte)nc), out var nIdx) && nIdx != cageIdx)
+                {
+                    adj[cageIdx].Add(nIdx);
+                    adj[nIdx].Add(cageIdx);
+                }
+            }
+            if (r > 0) Link(r - 1, c);
+            if (r < 8) Link(r + 1, c);
+            if (c > 0) Link(r, c - 1);
+            if (c < 8) Link(r, c + 1);
+        }
+
+        // Process cages in descending-degree order (Welsh-Powell heuristic)
+        var order = Enumerable.Range(0, n)
+            .OrderByDescending(i => adj[i].Count)
+            .ThenBy(i => i)
+            .ToList();
+
+        foreach (var cage in order)
+        {
+            var used = new HashSet<int>();
+            foreach (var neighbour in adj[cage])
+                if (_cageColors.TryGetValue(neighbour, out var nc))
+                    used.Add(nc);
+
+            int c = 0;
+            while (used.Contains(c) && c < ColorCount) c++;
+            _cageColors[cage] = c % ColorCount;
+        }
+    }
+
+    private record class CageDraft
+    {
+        public byte Sum { get; set; }
+        public List<(byte Row, byte Col)> Cells { get; init; } = new();
+    }
+
+    private int CoveredCells => _cellCage.Count;
+    private int NonEmptyCageCount => _cages.Count(c => c.Cells.Count > 0);
+    private int TotalCageSum => _cages.Where(c => c.Cells.Count > 0).Sum(c => c.Sum);
+    private bool CanSave => CoveredCells == 81 && TotalCageSum == 405 && _difficulty is >= 1 and <= 3;
+
+    private bool IsAnchorCell(int cageIdx, byte row, byte col)
+    {
+        var cells = _cages[cageIdx].Cells;
+        if (cells.Count == 0) return false;
+        var first = cells.OrderBy(c => c.Row).ThenBy(c => c.Col).First();
+        return first.Row == row && first.Col == col;
+    }
+
+    private void StartNewCage()
+    {
+        var cage = new CageDraft { Sum = 1 };
+        _cages.Add(cage);
+        _activeCageIdx = _cages.Count - 1;
+        RecomputeCageColors();
+        ClearMessage();
+    }
+
+    private async Task GenerateRandomAsync()
+    {
+        if (IsBusy) return;
+        ClearMessage();
+        _isGenerating = true;
+        StateHasChanged();
+
+        try
+        {
+            // Solver-Backtracking + uniqueness check kann ein paar Sekunden brauchen —
+            // off-thread laufen lassen, damit die SignalR-Circuit responsiv bleibt.
+            var diff = _difficulty;
+            var puzzle = await Task.Run(() => Generator.Generate(diff));
+
+            _cages.Clear();
+            _cellCage.Clear();
+            _activeCageIdx = null;
+
+            for (int i = 0; i < puzzle.Cages.Count; i++)
+            {
+                var dto = puzzle.Cages[i];
+                var draft = new CageDraft { Sum = dto.Sum };
+                draft.Cells.AddRange(dto.Cells);
+                _cages.Add(draft);
+                foreach (var cell in dto.Cells)
+                    _cellCage[cell] = i;
+            }
+
+            RecomputeCageColors();
+            _saveMessage = $"✓ Zufalls-Puzzle erzeugt (Difficulty {diff}, {puzzle.Cages.Count} Cages). " +
+                           "Du kannst noch ändern oder direkt speichern.";
+            _saveSuccess = true;
+        }
+        catch (InvalidOperationException ex)
+        {
+            _saveMessage = $"Generierung fehlgeschlagen: {ex.Message}";
+            _saveSuccess = false;
+        }
+        catch (Exception ex)
+        {
+            _saveMessage = $"Unerwarteter Fehler: {ex.Message}";
+            _saveSuccess = false;
+        }
+        finally
+        {
+            _isGenerating = false;
+        }
+    }
+
+    private Task ClickCellAsync(byte row, byte col)
+    {
+        if (!_activeCageIdx.HasValue) return Task.CompletedTask;
+        ClearMessage();
+
+        var key = (row, col);
+        var active = _cages[_activeCageIdx.Value];
+
+        if (_cellCage.TryGetValue(key, out var otherCageIdx) && otherCageIdx != _activeCageIdx.Value)
+        {
+            // Zelle gehört zu anderem Cage → entferne dort
+            _cages[otherCageIdx].Cells.Remove((row, col));
+        }
+
+        if (active.Cells.Contains((row, col)))
+        {
+            // Toggle off
+            active.Cells.Remove((row, col));
+            _cellCage.Remove(key);
+        }
+        else
+        {
+            if (active.Cells.Count >= 9)
+            {
+                _saveMessage = "Cage darf maximal 9 Zellen haben.";
+                _saveSuccess = false;
+                return Task.CompletedTask;
+            }
+            active.Cells.Add((row, col));
+            _cellCage[key] = _activeCageIdx.Value;
+        }
+        RecomputeCageColors();
+        return Task.CompletedTask;
+    }
+
+    private void FinishActiveCage() => _activeCageIdx = null;
+
+    private void DeleteActiveCage()
+    {
+        if (!_activeCageIdx.HasValue) return;
+        RemoveCage(_activeCageIdx.Value);
+        _activeCageIdx = null;
+    }
+
+    private void RemoveCage(int idx)
+    {
+        if (idx < 0 || idx >= _cages.Count) return;
+        var cage = _cages[idx];
+        foreach (var cell in cage.Cells) _cellCage.Remove(cell);
+        _cages.RemoveAt(idx);
+        // Indizes anpassen
+        var rebuilt = new Dictionary<(byte, byte), int>();
+        for (var i = 0; i < _cages.Count; i++)
+            foreach (var cell in _cages[i].Cells) rebuilt[cell] = i;
+        _cellCage.Clear();
+        foreach (var kv in rebuilt) _cellCage[kv.Key] = kv.Value;
+
+        if (_activeCageIdx >= _cages.Count) _activeCageIdx = null;
+        RecomputeCageColors();
+    }
+
+    private void UpdateCageSum(int idx, string? raw)
+    {
+        if (idx < 0 || idx >= _cages.Count) return;
+        if (!byte.TryParse(raw, out var s)) return;
+        if (s < 1) s = 1;
+        if (s > 45) s = 45;
+        _cages[idx].Sum = s;
+        ClearMessage();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave) return;
+        ClearMessage();
+        _isSaving = true;
+
+        try
+        {
+            var auth = await AuthState.GetAuthenticationStateAsync();
+            var user = await UserMgr.GetUserAsync(auth.User);
+            if (user is null) { _saveMessage = "Benutzer nicht gefunden."; _saveSuccess = false; return; }
+
+            var input = new PuzzleInputDto(
+                _difficulty,
+                _cages.Where(c => c.Cells.Count > 0)
+                      .Select(c => new CageInputDto(c.Sum, c.Cells.ToList())).ToList());
+
+            var result = await PuzzleSvc.SaveIfSolvableAsync(input, user.Id);
+            switch (result.Status)
+            {
+                case SaveStatus.Saved:
+                    _saveMessage = "✓ Puzzle gespeichert — Weiterleitung…";
+                    _saveSuccess = true;
+                    await Task.Delay(900);
+                    Nav.NavigateTo($"/puzzles/{result.PuzzleId}/play");
+                    break;
+                case SaveStatus.NotSolvable:
+                    _saveMessage = "Puzzle ist mit den aktuellen Cage-Summen nicht lösbar.";
+                    _saveSuccess = false;
+                    break;
+                case SaveStatus.MultipleSolutions:
+                    _saveMessage = "Puzzle hat mehrere Lösungen — die Lösung muss eindeutig sein (README §1).";
+                    _saveSuccess = false;
+                    break;
+                case SaveStatus.InvalidStructure:
+                    _saveMessage = "Struktur ungültig. Prüfe ob alle 81 Zellen abgedeckt sind und Σ = 405.";
+                    _saveSuccess = false;
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _saveMessage = $"Fehler beim Speichern: {ex.Message}";
+            _saveSuccess = false;
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void ClearMessage() { _saveMessage = null; _saveSuccess = false; }
+
+    private string GetBorderClass(byte r, byte c)
+    {
+        var sb = new System.Text.StringBuilder();
+        if (r == 2 || r == 5) sb.Append("border-bottom-thick ");
+        if (c == 2 || c == 5) sb.Append("border-right-thick ");
+        return sb.ToString().TrimEnd();
+    }
+}

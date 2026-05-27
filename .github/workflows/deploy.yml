@@ -1,0 +1,87 @@
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'source/**'
+      - 'db/**'
+      - 'Dockerfile'
+      - 'docker-entrypoint.sh'
+      - 'docker-compose.prod.yml'
+      - '.dockerignore'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_BASENAME: killer-sudoku
+
+permissions:
+  contents: read
+  packages: write
+
+# Runner = VPS = Docker-Host. Build, push, compose up — alles auf der gleichen Maschine.
+jobs:
+  build-and-deploy:
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lowercase repo owner
+        id: owner
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "owner_lc=$(printf '%s' "$OWNER" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Build image
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner_lc }}/${{ env.IMAGE_BASENAME }}
+          SHA: ${{ github.sha }}
+        run: |
+          docker build \
+            --pull \
+            -t "${IMAGE}:latest" \
+            -t "${IMAGE}:${SHA::7}" \
+            -f Dockerfile \
+            .
+
+      - name: Push to GHCR
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ steps.owner.outputs.owner_lc }}/${{ env.IMAGE_BASENAME }}
+          SHA: ${{ github.sha }}
+        run: |
+          docker push "${IMAGE}:latest"
+          docker push "${IMAGE}:${SHA::7}"
+
+      - name: Deploy via docker compose
+        env:
+          MSSQL_SA_PASSWORD: ${{ secrets.MSSQL_SA_PASSWORD }}
+        run: |
+          umask 077
+          printf 'MSSQL_SA_PASSWORD=%s\n' "${MSSQL_SA_PASSWORD}" > .env
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+          docker image prune -f
+          rm -f .env
+
+      - name: Smoke-test live endpoint
+        run: |
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 5 https://web17skill.com/health; then
+              echo
+              echo "✓ live endpoint healthy"
+              exit 0
+            fi
+            echo "attempt $i — waiting 6s ..."
+            sleep 6
+          done
+          echo "✗ live endpoint did not become healthy in 120s"
+          docker compose -f docker-compose.prod.yml logs --tail=80 killersudoku || true
+          exit 1

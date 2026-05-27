@@ -1,0 +1,124 @@
+@page "/highscore"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode InteractiveServer
+@using KillerSudoku.Core.Abstractions
+@using KillerSudoku.Core.Models
+@inject IHighscoreService HighscoreSvc
+
+<PageTitle>Highscore &middot; Killer Sudoku</PageTitle>
+
+<section class="highscore">
+    <div class="container">
+        <header class="highscore__head">
+            <h1>Highscore</h1>
+            <p class="highscore__subtitle">Die besten Resultate aller Spieler.</p>
+        </header>
+
+        <div class="highscore__tabs" role="tablist" aria-label="Filter nach Schwierigkeit">
+            <button type="button"
+                    class="filter-pill @(IsActive(null) ? "filter-pill--active" : "")"
+                    @onclick="() => SetFilter(null)">
+                Alle
+            </button>
+            <button type="button"
+                    class="filter-pill @(IsActive((byte)1) ? "filter-pill--active" : "")"
+                    @onclick="() => SetFilter(1)">
+                1
+            </button>
+            <button type="button"
+                    class="filter-pill @(IsActive((byte)2) ? "filter-pill--active" : "")"
+                    @onclick="() => SetFilter(2)">
+                2
+            </button>
+            <button type="button"
+                    class="filter-pill @(IsActive((byte)3) ? "filter-pill--active" : "")"
+                    @onclick="() => SetFilter(3)">
+                3
+            </button>
+        </div>
+
+        @if (Filtered.Count == 0)
+        {
+            <div class="highscore__empty">
+                <p>Noch keine Resultate &mdash; sei der Erste!</p>
+            </div>
+        }
+        else
+        {
+            <div class="highscore__table-wrap">
+                <table class="highscore-table" data-testid="highscore-table">
+                    <thead>
+                        <tr>
+                            <th class="col-rank">#</th>
+                            <th>Spieler</th>
+                            <th class="col-diff">Diff</th>
+                            <th class="col-time">Zeit</th>
+                            <th class="col-hints">Hints</th>
+                            <th class="col-score">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @{
+                            var rank = 1;
+                            foreach (var e in Filtered)
+                            {
+                                var rowClass = rank switch
+                                {
+                                    1 => "highscore-row--gold",
+                                    2 => "highscore-row--silver",
+                                    3 => "highscore-row--bronze",
+                                    _ => string.Empty
+                                };
+                                <tr class="highscore-row @rowClass" data-rank="@rank" data-testid="highscore-row">
+                                    <td class="col-rank">
+                                        <span class="rank-badge">@rank</span>
+                                    </td>
+                                    <td>
+                                        <span class="player">
+                                            <span class="player__avatar" aria-hidden="true">@GetInitial(e.Username)</span>
+                                            <span class="player__name">@e.Username</span>
+                                        </span>
+                                    </td>
+                                    <td class="col-diff">
+                                        <span class="difficulty-badge difficulty-@e.Difficulty">@e.Difficulty</span>
+                                    </td>
+                                    <td class="col-time mono">@FormatTime(e.TimeSeconds)</td>
+                                    <td class="col-hints mono">@e.HintsUsed</td>
+                                    <td class="col-score mono"><strong>@e.Score</strong></td>
+                                </tr>
+                                rank++;
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    private byte? _filter;
+    private IReadOnlyList<HighscoreEntry> _all = Array.Empty<HighscoreEntry>();
+
+    private bool IsActive(byte? value) => _filter == value;
+
+    protected override async Task OnInitializedAsync()
+        => _all = await HighscoreSvc.GetTopAsync(limit: 50);
+
+    private async Task SetFilter(byte? value)
+    {
+        _filter = value;
+        _all = await HighscoreSvc.GetTopAsync(limit: 50, difficulty: value);
+    }
+
+    private IReadOnlyList<HighscoreEntry> Filtered => _all;
+
+    private static string GetInitial(string? name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : char.ToUpperInvariant(name[0]).ToString();
+
+    private static string FormatTime(int seconds)
+    {
+        var t = TimeSpan.FromSeconds(seconds);
+        return $"{(int)t.TotalHours:D2}:{t.Minutes:D2}:{t.Seconds:D2}";
+    }
+}
