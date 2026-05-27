@@ -15,18 +15,35 @@ public sealed class GameServiceTests
     private readonly MsSqlContainerFixture _fx;
     public GameServiceTests(MsSqlContainerFixture fx) => _fx = fx;
 
-    private async Task<(int userId, int puzzleId, PuzzleInputDto input)> CreateSavedPuzzleAsync(int seed)
+    private async Task<(int userId, int puzzleId, PuzzleInputDto input)> CreateSavedPuzzleAsync(
+        int seed, byte difficulty = 1)
     {
+        // Default difficulty=1 → schnelle Generierung. Tests, die wirklich ein
+        // leeres Grid brauchen (T050), übergeben difficulty=3 oder leeren Cells
+        // explizit nach StartGameAsync.
         var userId = await ServiceFactory.CreateUserAsync(_fx);
-        var input = ServiceFactory.Generator().Generate(difficulty: 1, new Random(seed));
+        var input = ServiceFactory.Generator().Generate(difficulty, new Random(seed));
         var svc = ServiceFactory.NewPuzzleService(_fx);
         var saved = await svc.SaveIfSolvableAsync(input, userId);
         saved.Status.Should().Be(SaveStatus.Saved);
         return (userId, saved.PuzzleId!.Value, input);
     }
 
+    /// <summary>
+    /// Räumt alle Prefill-Clues aus dem Game ab — für Tests die mit garantiert
+    /// leeren GameCells starten müssen.
+    /// </summary>
+    private async Task ClearAllCellsAsync(int gameId)
+    {
+        await using var ctx = ServiceFactory.NewContext(_fx);
+        var cells = await ctx.GameCells.Where(c => c.GameId == gameId).ToListAsync();
+        foreach (var c in cells) c.CellValue = null;
+        await ctx.SaveChangesAsync();
+    }
+
     // -------------------------------------------------------------------
     // T050 — StartGameAsync legt Game-Row + 81 GameCells an.
+    //   Verwendet Difficulty 3 (keine Prefill-Clues) damit alle 81 Zellen leer sind.
     // -------------------------------------------------------------------
     [Fact]
     public async Task T050_StartGame_CreatesGameAndAll81Cells()
@@ -41,8 +58,65 @@ public sealed class GameServiceTests
         game.UserId.Should().Be(userId);
         game.PuzzleId.Should().Be(puzzleId);
         game.IsCompleted.Should().BeFalse();
+        // 81 GameCells müssen erzeugt werden — Werte können je nach Difficulty
+        // teilweise als Prefill-Clues vorbelegt sein (UC06).
         game.Cells.Should().HaveCount(81);
-        game.Cells.Should().OnlyContain(c => c.CellValue == null);
+    }
+
+    // -------------------------------------------------------------------
+    // Prefill-Verhalten: Difficulty 1 → 20 vorgefüllte Zellen, deterministisch pro Puzzle.
+    // -------------------------------------------------------------------
+    [Fact]
+    public async Task StartGame_Difficulty1_Prefills20Cells()
+    {
+        var (userId, puzzleId, input) = await CreateSavedPuzzleAsync(seed: 5001, difficulty: 1);
+
+        var gameId = await ServiceFactory.NewGameService(_fx).StartGameAsync(userId, puzzleId);
+
+        await using var ctx = ServiceFactory.NewContext(_fx);
+        var filled = await ctx.GameCells
+            .Where(c => c.GameId == gameId && c.CellValue != null)
+            .ToListAsync();
+        filled.Should().HaveCount(20);
+
+        // Werte stimmen mit der eindeutigen Solver-Lösung überein
+        var solution = ServiceFactory.Solver().Solve(new byte[9, 9], input.Cages).Solution!;
+        foreach (var cell in filled)
+            cell.CellValue.Should().Be(solution[cell.RowIdx, cell.ColIdx]);
+    }
+
+    [Fact]
+    public async Task StartGame_Difficulty1_PrefillIsDeterministicPerPuzzle()
+    {
+        var (user1, puzzleId, _) = await CreateSavedPuzzleAsync(seed: 5002, difficulty: 1);
+        var user2 = await ServiceFactory.CreateUserAsync(_fx);
+
+        var g1 = await ServiceFactory.NewGameService(_fx).StartGameAsync(user1, puzzleId);
+        var g2 = await ServiceFactory.NewGameService(_fx).StartGameAsync(user2, puzzleId);
+
+        await using var ctx = ServiceFactory.NewContext(_fx);
+        var cells1 = await ctx.GameCells
+            .Where(c => c.GameId == g1 && c.CellValue != null)
+            .Select(c => new { c.RowIdx, c.ColIdx, c.CellValue })
+            .OrderBy(x => x.RowIdx).ThenBy(x => x.ColIdx).ToListAsync();
+        var cells2 = await ctx.GameCells
+            .Where(c => c.GameId == g2 && c.CellValue != null)
+            .Select(c => new { c.RowIdx, c.ColIdx, c.CellValue })
+            .OrderBy(x => x.RowIdx).ThenBy(x => x.ColIdx).ToListAsync();
+
+        cells1.Should().Equal(cells2,
+            "Spieler auf demselben Puzzle bekommen identische Startbelegung (Fairness).");
+    }
+
+    [Fact]
+    public async Task StartGame_Difficulty3_HasNoPrefill()
+    {
+        var (userId, puzzleId, _) = await CreateSavedPuzzleAsync(seed: 5003, difficulty: 3);
+        var gameId = await ServiceFactory.NewGameService(_fx).StartGameAsync(userId, puzzleId);
+
+        await using var ctx = ServiceFactory.NewContext(_fx);
+        var filledCount = await ctx.GameCells.CountAsync(c => c.GameId == gameId && c.CellValue != null);
+        filledCount.Should().Be(0);
     }
 
     // -------------------------------------------------------------------

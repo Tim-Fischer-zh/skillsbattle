@@ -33,7 +33,7 @@ internal static class ServiceFactory
         => new(NewContext(fx), StructValidator(), Solver());
 
     public static GameService NewGameService(MsSqlContainerFixture fx, TimeProvider? clock = null)
-        => new(NewContext(fx), Validator(), Score(), clock);
+        => new(NewContext(fx), Validator(), Solver(), Score(), clock);
 
     public static HintService NewHintService(MsSqlContainerFixture fx)
         => new(NewContext(fx), Solver());

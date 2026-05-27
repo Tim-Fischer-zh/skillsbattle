@@ -11,17 +11,20 @@ public sealed class GameService : IGameService
 {
     private readonly SudokuDbContext _db;
     private readonly SolutionValidator _validator;
+    private readonly ISolverService _solver;
     private readonly IScoreCalculator _score;
     private readonly TimeProvider _clock;
 
     public GameService(
         SudokuDbContext db,
         SolutionValidator validator,
+        ISolverService solver,
         IScoreCalculator score,
         TimeProvider? clock = null)
     {
         _db = db;
         _validator = validator;
+        _solver = solver;
         _score = score;
         _clock = clock ?? TimeProvider.System;
     }
@@ -29,6 +32,20 @@ public sealed class GameService : IGameService
     /// <summary>
     /// UC06 — Start a new game OR resume the active one for (user, puzzle).
     /// Single-active-game-per-pair is enforced by filtered unique index UX_Game_ActiveOnly.
+    ///
+    /// <para>
+    /// Beim ersten Start eines Spiels werden je nach Puzzle-Difficulty initiale
+    /// "Clue"-Zellen aus der eindeutigen Solver-Lösung vorausgefüllt
+    /// (Difficulty 1 = 20 Clues, 2 = 8, 3 = 0). Die Auswahl ist deterministisch
+    /// per Puzzle-Id, sodass alle Spieler desselben Puzzles fairerweise denselben
+    /// Startzustand bekommen.
+    /// </para>
+    /// <para>
+    /// Konform mit Spec UC04 "No solution is recorded" — die Clues werden nicht
+    /// persistent am Puzzle gespeichert, sondern beim Spielstart aus dem
+    /// Solver re-erzeugt; in der DB landen sie nur als gewöhnliche
+    /// GameCell-Werte des aktuellen Games.
+    /// </para>
     /// </summary>
     public async Task<int> StartGameAsync(int userId, int puzzleId, CancellationToken ct = default)
     {
@@ -39,8 +56,11 @@ public sealed class GameService : IGameService
 
         if (existing.HasValue) return existing.Value;
 
-        var puzzleExists = await _db.Puzzles.AnyAsync(p => p.Id == puzzleId, ct);
-        if (!puzzleExists) throw new InvalidOperationException($"Puzzle {puzzleId} nicht gefunden");
+        var puzzle = await _db.Puzzles
+            .AsNoTracking()
+            .Include(p => p.Cages).ThenInclude(c => c.Cells)
+            .FirstOrDefaultAsync(p => p.Id == puzzleId, ct)
+            ?? throw new InvalidOperationException($"Puzzle {puzzleId} nicht gefunden");
 
         var game = new Game
         {
@@ -51,19 +71,49 @@ public sealed class GameService : IGameService
         _db.Games.Add(game);
         await _db.SaveChangesAsync(ct);
 
-        // Initialisiere 81 GameCells (alle leer)
+        // Optionaler Prefill: in der Solver-Lösung liegende Zellen als Clues
+        // ins Game vorbefüllen. Auswahl ist deterministisch pro Puzzle.
+        var prefill = ComputePrefillCells(puzzle);
+
         for (byte r = 0; r < 9; r++)
         for (byte c = 0; c < 9; c++)
+        {
+            byte? value = null;
+            if (prefill is not null && prefill[r, c] != 0) value = prefill[r, c];
+
             _db.GameCells.Add(new GameCell
             {
                 GameId = game.Id,
                 RowIdx = r,
                 ColIdx = c,
-                CellValue = null,
+                CellValue = value,
             });
+        }
         await _db.SaveChangesAsync(ct);
 
         return game.Id;
+    }
+
+    private byte[,]? ComputePrefillCells(Puzzle puzzle)
+    {
+        int count = ClueSelector.CountForDifficulty(puzzle.Difficulty);
+        if (count == 0) return null;
+
+        var cages = puzzle.Cages
+            .Select(c => new CageInputDto(c.Sum,
+                c.Cells.Select(cc => (cc.RowIdx, cc.ColIdx)).ToList()))
+            .ToList();
+
+        var solveResult = _solver.Solve(new byte[9, 9], cages);
+        if (solveResult.Solutions != 1 || solveResult.Solution is null) return null;
+
+        // Cage-Hash-deterministisch → identisch mit der Editor-Preview aus PuzzleGenerator.
+        var clues = ClueSelector.PickClues(solveResult.Solution, cages, count);
+
+        var grid = new byte[9, 9];
+        foreach (var clue in clues)
+            grid[clue.Row, clue.Col] = clue.Value;
+        return grid;
     }
 
     public async Task SetCellValueAsync(

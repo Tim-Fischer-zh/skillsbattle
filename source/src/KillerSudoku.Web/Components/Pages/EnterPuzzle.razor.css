@@ -42,6 +42,17 @@
     font-family: 'JetBrains Mono', monospace;
 }
 
+.grid--editor .grid-cell__value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1;
+}
+.grid--editor .grid-cell__value--clue {
+    color: #1e3a8a;
+}
+
 .editor__grid-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .editor__sidebar {

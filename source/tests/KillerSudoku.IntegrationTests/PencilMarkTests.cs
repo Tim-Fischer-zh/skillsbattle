@@ -18,11 +18,20 @@ public sealed class PencilMarkTests
 
     private async Task<int> CreateGameAsync(int seed)
     {
+        // Schnelle Difficulty-1-Generierung; danach räumen wir die deterministisch
+        // gesetzten Prefill-Clues weg — Pencil-Tests brauchen leere Zellen.
         var userId = await ServiceFactory.CreateUserAsync(_fx);
         var input = ServiceFactory.Generator().Generate(difficulty: 1, new Random(seed));
         var saved = await ServiceFactory.NewPuzzleService(_fx).SaveIfSolvableAsync(input, userId);
         saved.Status.Should().Be(SaveStatus.Saved);
-        return await ServiceFactory.NewGameService(_fx).StartGameAsync(userId, saved.PuzzleId!.Value);
+        var gameId = await ServiceFactory.NewGameService(_fx).StartGameAsync(userId, saved.PuzzleId!.Value);
+
+        await using var ctx = ServiceFactory.NewContext(_fx);
+        var cells = await ctx.GameCells.Where(c => c.GameId == gameId).ToListAsync();
+        foreach (var c in cells) c.CellValue = null;
+        await ctx.SaveChangesAsync();
+
+        return gameId;
     }
 
     // -------------------------------------------------------------------

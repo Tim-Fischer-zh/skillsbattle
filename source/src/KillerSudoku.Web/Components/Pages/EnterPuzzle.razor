@@ -69,6 +69,10 @@
                                     {
                                         <span class="grid-cell__cage-sum">@_cages[cageIndex!.Value].Sum</span>
                                     }
+                                    @if (_clues.TryGetValue(key, out var clueValue))
+                                    {
+                                        <span class="grid-cell__value grid-cell__value--clue">@clueValue</span>
+                                    }
                                 </button>
                             }
                         </div>
@@ -189,6 +193,8 @@
     private readonly List<CageDraft> _cages = new();
     private readonly Dictionary<(byte, byte), int> _cellCage = new();
     private readonly Dictionary<int, int> _cageColors = new();
+    /// <summary>Clues aus dem Generator — Preview im Editor, identisch mit /play.</summary>
+    private readonly Dictionary<(byte Row, byte Col), byte> _clues = new();
     private int? _activeCageIdx;
     private bool _isSaving;
     private bool _isGenerating;
@@ -270,6 +276,7 @@
         var cage = new CageDraft { Sum = 1 };
         _cages.Add(cage);
         _activeCageIdx = _cages.Count - 1;
+        _clues.Clear(); // manuelle Cage-Änderung → Generator-Preview-Clues verwerfen
         RecomputeCageColors();
         ClearMessage();
     }
@@ -290,6 +297,7 @@
 
             _cages.Clear();
             _cellCage.Clear();
+            _clues.Clear();
             _activeCageIdx = null;
 
             for (int i = 0; i < puzzle.Cages.Count; i++)
@@ -302,9 +310,16 @@
                     _cellCage[cell] = i;
             }
 
+            if (puzzle.Clues is not null)
+            {
+                foreach (var clue in puzzle.Clues)
+                    _clues[(clue.Row, clue.Col)] = clue.Value;
+            }
+
             RecomputeCageColors();
-            _saveMessage = $"✓ Zufalls-Puzzle erzeugt (Difficulty {diff}, {puzzle.Cages.Count} Cages). " +
-                           "Du kannst noch ändern oder direkt speichern.";
+            var clueCount = puzzle.Clues?.Count ?? 0;
+            _saveMessage = $"✓ Zufalls-Puzzle erzeugt (Difficulty {diff}, {puzzle.Cages.Count} Cages, " +
+                           $"{clueCount} vorgefüllte Zellen). Du kannst noch ändern oder direkt speichern.";
             _saveSuccess = true;
         }
         catch (InvalidOperationException ex)
@@ -354,6 +369,7 @@
             active.Cells.Add((row, col));
             _cellCage[key] = _activeCageIdx.Value;
         }
+        _clues.Clear(); // manuelle Zellen-Bewegung invalidiert die deterministische Clue-Preview
         RecomputeCageColors();
         return Task.CompletedTask;
     }
@@ -381,6 +397,7 @@
         foreach (var kv in rebuilt) _cellCage[kv.Key] = kv.Value;
 
         if (_activeCageIdx >= _cages.Count) _activeCageIdx = null;
+        _clues.Clear();
         RecomputeCageColors();
     }
 

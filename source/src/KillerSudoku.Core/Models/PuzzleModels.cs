@@ -2,7 +2,19 @@ namespace KillerSudoku.Core.Models;
 
 // Puzzle structure (used for both Editor input and Solver verification)
 public sealed record CageInputDto(byte Sum, IReadOnlyList<(byte Row, byte Col)> Cells);
-public sealed record PuzzleInputDto(byte Difficulty, IReadOnlyList<CageInputDto> Cages);
+
+/// <summary>
+/// Optional clue cell — pre-filled value that the player sees at game start.
+/// Not persisted at the Puzzle level (Spec UC04 "No solution is recorded"); the
+/// generator computes them deterministically from the cage layout so the editor
+/// preview and the game start show identical prefills.
+/// </summary>
+public sealed record ClueDto(byte Row, byte Col, byte Value);
+
+public sealed record PuzzleInputDto(
+    byte Difficulty,
+    IReadOnlyList<CageInputDto> Cages,
+    IReadOnlyList<ClueDto>? Clues = null);
 
 // List projection (UC12 Browse). `BestScore` is the requesting user's best score for
 // this puzzle (null = never played or no completed game).

@@ -53,9 +53,15 @@ public sealed class PuzzleGenerator : IPuzzleGenerator
                 var cages = PartitionIntoCages(solved, minSize, maxSize, allowSingletons, rng);
                 if (cages is null) continue;
 
-                int count = _solver.CountSolutions(new byte[9, 9], cages, limit: 2);
-                if (count == 1)
-                    return new PuzzleInputDto(difficulty, cages);
+                var solveResult = _solver.Solve(new byte[9, 9], cages);
+                if (solveResult.Solutions == 1 && solveResult.Solution is not null)
+                {
+                    // Clues für die UI-Preview im Editor — deterministisch
+                    // anhand der Cage-Layout-Hash, damit /play später identisch ist.
+                    int clueCount = ClueSelector.CountForDifficulty(difficulty);
+                    var clues = ClueSelector.PickClues(solveResult.Solution, cages, clueCount);
+                    return new PuzzleInputDto(difficulty, cages, clues);
+                }
             }
         }
 
