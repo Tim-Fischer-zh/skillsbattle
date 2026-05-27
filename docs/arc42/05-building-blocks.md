@@ -70,9 +70,9 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 | **Pages (`@page`)** | `Home.razor` (S1, `/`) · `Auth/Register.razor` (S2, `/register`) · `Auth/Login.razor` (S3, `/login`) · `Puzzles.razor` (S4, `/puzzles`) · `EnterPuzzle.razor` (S5, `/puzzles/new`) · `PlayPuzzle.razor` (S6, `/puzzles/{id}/play`) · `Highscore.razor` (S7, `/highscore`). |
 | **Shared Components** | `App.razor` · `Routes.razor` · `RedirectToLogin.razor` · `MainLayout.razor` · `ReconnectModal.razor` · `MiniSudokuExample.razor` · `Error.razor` · `NotFound.razor`. |
 | **Querschnitt** | `[Authorize]` auf allen Pages außer S1/S2/S3 ([V16](../validation.md#v16--authorization-alle-geschützten-seitenendpoints)); `EditForm` mit Antiforgery ([V15](../validation.md#v15--csrf-alle-post-endpoints)); Razor-`@`-Encoding ([V14](../validation.md#v14--xss--output-encoding-alle-screens)). |
+| **Test-Strategie** | bUnit-Component-Tests (Rendering, Event-Handler), E2E ohne Framework gemäß README §3.2. |
 
 **Inline-UI:** Die im class-diagram.md skizzierten Sub-Komponenten (`PuzzleGrid`, `Toolbar`, `CageEditor`, `HintButton`, `PauseButton`, `CheckSolutionButton`, `PencilMarkLayer`, `FilterBar`, `PuzzleCard`, `HighscoreTable`, `RegisterForm`, `LoginForm`, `RulesPanel`, `NavMenu`) sind aktuell **nicht als eigene .razor-Dateien implementiert** — ihre Markup-/Event-Handler-Logik lebt inline in den Pages (`PlayPuzzle.razor`, `EnterPuzzle.razor`, `Puzzles.razor`, `Highscore.razor`, `Home.razor`, `Auth/Login.razor`, `Auth/Register.razor`). Dies hält den Component-Tree flach. Eine spätere Extraktion ist möglich, ohne API-Brüche.
-| **Test-Strategie** | bUnit-Component-Tests (Rendering, Event-Handler), E2E ohne Framework gemäß README §3.2. |
 
 ### 5.2.2 KillerSudoku.Core — Application Services
 
@@ -94,7 +94,7 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 | **Zweck** | Reine Algorithmik für die vier Killer-Sudoku-Regeln aus README §1: (1) "Each row, column, and nonet contains each number exactly once", (2) "The sum of all numbers in a cage must match the small number printed in its corner", (3) "No number appears more than once in a cage", (4) "The solution must be unique". |
 | **Eingehende Schnittstelle** | `ISolverService` — Methoden `Solve(givenValues, cages)` und `CountSolutions(givenValues, cages)` ([Funktionalitäts-Matrix](../functionality.md) §Service-Interfaces). |
 | **Ausgehende Schnittstelle** | **Keine** — pure C# ohne Framework- oder DB-Abhängigkeit. |
-| **Enthaltene Klassen** | `SolverService` (Backtracker + Constraint-Propagation) · `SolutionValidator` (Row/Col/Nonet/Cage-Check für UC09 §6.3) · `HintStrategies` (Naked Single, Cage-Forced; siehe UC07 in [`../use-cases.md`](../use-cases.md)) · interne Records `CageDef`, `Board`. |
+| **Enthaltene Klassen** | `SolverService` (Backtracking + MRV + Bit-Masken + Cage-Pruning, sealed) · `SolutionValidator` (Vollständigkeit → Σ=405 → Row/Col/Nonet → Cage-Sum/Duplikat für UC09) · `PuzzleStructureValidator` (Pre-Save-Check: Difficulty, Cage-Sum-Range, Coverage 81 Zellen für UC04) · `PuzzleGenerator` (Random-Generator für UC04 Editor) · `ScoreCalculator` (Score-Formel UC08/UC10). **Die Hint-Strategien (Naked Single → Cage-Forced → Solver-Fallback) sind in `HintService` (Data-Layer) inline implementiert**, nicht als eigenständige Domain-Klasse. |
 | **Performance-Anforderung** | AC11.2: terminiert auch bei schweren Puzzles in < 2 s; bricht bei Zähl-Modus nach der 2. gefundenen Lösung ab. |
 | **Test-Strategie** | Reine Unit-Tests mit den 2 README-Beispielen (§1.2) + Edge-Cases: unsolvable, multi-solution, vollständig vor-gelöst, minimal-clue. Höchste Test-Coverage-Priorität (siehe [Funktionalitäts-Matrix](../functionality.md) §Kritische Abhängigkeiten). |
 
@@ -106,7 +106,7 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 | **Eingehende Schnittstelle** | `SudokuDbContext` (DbSet&lt;T&gt; für jede Entity). |
 | **Ausgehende Schnittstelle** | T-SQL gegen MS-SQL Express via ADO.NET-Provider. |
 | **Enthaltene Entities** | `AppUser` · `Puzzle` · `Cage` · `CageCell` · `Game` · `GameCell` · `PencilMark` · `HintLog`. Schema-Quelle: [`../../db/sudoku.sql`](../../db/sudoku.sql), ERD: [`../erm.md`](../erm.md). |
-| **View-Read-Model** | `vw_Highscore` (siehe `sudoku.sql` Zeilen 215–231) — wird per `Set<HighscoreEntry>().FromSqlRaw(...)` oder Keyless-Entity gelesen. |
+| **View-Read-Model** | `vw_Highscore` existiert im SQL-Schema (`db/sudoku.sql` Z. 215–231), wird vom aktuellen `SudokuDbContext` aber **nicht** als Keyless-Entity gemappt. `HighscoreService` liest stattdessen via LINQ-Join über `_db.Games` (siehe §5.2.2). |
 | **DB-Constraints (Defense-Layer)** | Siehe §5.4 unten. |
 | **Test-Strategie** | Integration-Tests mit Testcontainers (MS-SQL-Image) oder lokaler Test-DB; Constraint-Tests (INSERT mit Difficulty=4 muss fehlschlagen) gemäß [`../erm.md`](../erm.md) §Ableitungen für Tests. |
 
@@ -114,83 +114,20 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 
 ## 5.3 ER-Modell (Verweis + Einbettung)
 
-Das ER-Modell ist autoritativ in [`../erm.md`](../erm.md) dokumentiert, inklusive Design-Entscheidungen, Constraints und Sample-Queries. Für die PDF-Lesbarkeit ist das Mermaid-ERD hier eingebettet:
+Das vollständige ER-Modell mit Identity-Spalten und Nullable-Markierungen ist autoritativ in [`../erm.md`](../erm.md). Für die PDF-Lesbarkeit wird hier nur eine konzeptionelle Übersicht referenziert — die fachlichen Beziehungen lauten:
 
-```mermaid
-erDiagram
-    AppUser   ||--o{ Puzzle    : creates
-    AppUser   ||--o{ Game      : plays
-    Puzzle    ||--o{ Cage      : contains
-    Puzzle    ||--o{ Game      : "is played in"
-    Cage      ||--|{ CageCell  : has
-    Game      ||--|{ GameCell  : has
-    Game      ||--o{ PencilMark: has
-    Game      ||--o{ HintLog   : logs
-
-    AppUser {
-        int      Id           PK
-        nvarchar Username     UK
-        nvarchar Email        UK
-        nvarchar PasswordHash
-        datetime2 CreatedAt
-    }
-    Puzzle {
-        int       Id          PK
-        tinyint   Difficulty
-        int       CreatedById FK
-        datetime2 CreatedAt
-    }
-    Cage {
-        int     Id        PK
-        int     PuzzleId  FK
-        tinyint Sum
-    }
-    CageCell {
-        int     CageId    PK,FK
-        tinyint RowIdx    PK
-        tinyint ColIdx    PK
-    }
-    Game {
-        int       Id                 PK
-        int       UserId             FK
-        int       PuzzleId           FK
-        datetime2 StartTime
-        datetime2 EndTime
-        int       TimeSeconds
-        int       HintsUsed
-        int       Score
-        bit       IsCompleted
-        bit       IsPaused
-        datetime2 PausedAt
-        int       TotalPausedSeconds
-    }
-    GameCell {
-        int     GameId   PK,FK
-        tinyint RowIdx   PK
-        tinyint ColIdx   PK
-        tinyint CellValue
-    }
-    PencilMark {
-        int     GameId    PK,FK
-        tinyint RowIdx    PK
-        tinyint ColIdx    PK
-        tinyint MarkValue PK
-    }
-    HintLog {
-        int       Id       PK
-        int       GameId   FK
-        tinyint   RowIdx
-        tinyint   ColIdx
-        datetime2 HintAt
-    }
-```
+- `AppUser` (Identity-Basisklasse) 1:N `Puzzle` (CreatedBy)
+- `AppUser` 1:N `Game`
+- `Puzzle` 1:N `Cage` (1..*)
+- `Cage` 1:N `CageCell` (jede Zelle 0–8 × 0–8 pro Puzzle eindeutig — durch Trigger erzwungen)
+- `Game` 1:N `GameCell`, `PencilMark`, `HintLog`
 
 **Schlüssel-Begründungen (Auszug aus [`../erm.md`](../erm.md)):**
 
 - `AppUser` statt `User` — `USER` ist reserviertes T-SQL-Keyword.
 - `RowIdx`/`ColIdx` statt `Row`/`Col` — beides reserviert.
 - **Keine Solution-Spalte** in `Puzzle` — UC04 wörtlich: *"No solution is recorded. Solutions must be calculated with an algorithm"*.
-- `Highscore` als **VIEW** statt denormalisierte Tabelle — single source of truth, kein Sync-Problem.
+- `vw_Highscore`-VIEW existiert im SQL-Schema als Reserve; `HighscoreService` liest aktuell via LINQ-Join (single source of truth: `Game`-Tabelle).
 - Pause-Mechanik via `IsPaused` + `PausedAt` + `TotalPausedSeconds` → erlaubt sauberen Resume mit `TimeSeconds = DATEDIFF(SECOND, StartTime, EndTime) − TotalPausedSeconds`.
 
 ---
@@ -202,8 +139,10 @@ Vollständiges Schema in [`../../db/sudoku.sql`](../../db/sudoku.sql). Folgende 
 **Tabellen (in Reverse-FK-Reihenfolge erzeugt):**
 
 - `AppUser` — Benutzer mit gehashtem Passwort
-  - UNIQUE: `Username`, `Email`
-  - CHECK: `Username` non-empty, `Email` LIKE `%_@_%.__%`
+  - ASP.NET Identity-Basis: nutzt UserName, NormalizedUserName, Email, NormalizedEmail, PasswordHash, SecurityStamp, ConcurrencyStamp, Lockout-Felder, AccessFailedCount.
+  - Filtered UNIQUE: `IX_AppUser_UserName` und `IX_AppUser_Email` (jeweils WHERE NOT NULL).
+  - **Keine** CHECK-Constraints für UserName-Non-Empty oder Email-Format im Schema — Validation läuft Client + Server (siehe [`../validation.md`](../validation.md) V01/V02).
+  - Zusätzliche Spalte `CreatedAt` (datetime2(0)).
 - `Puzzle` — Killer-Sudoku-Definition, **keine** Solution-Spalte
   - FK: `CreatedById → AppUser(Id)`
   - CHECK: `Difficulty BETWEEN 1 AND 3`
@@ -217,7 +156,7 @@ Vollständiges Schema in [`../../db/sudoku.sql`](../../db/sudoku.sql). Folgende 
   - CHECK: `RowIdx`, `ColIdx` BETWEEN 0 AND 8
 - `Game` — Spiel-Session
   - FK: `UserId → AppUser(Id)`, `PuzzleId → Puzzle(Id)`
-  - CHECK: `TimeSeconds ≥ 0`, `HintsUsed ≥ 0`, `Score ≥ 0`, `TotalPausedSeconds ≥ 0`
+  - CHECK: `TimeSeconds` NULL oder ≥ 0, `Score` NULL oder ≥ 0, `HintsUsed ≥ 0`, `TotalPausedSeconds ≥ 0`
   - Indices: `IX_Game_UserId`, `IX_Game_PuzzleId`
 - `GameCell` — Aktueller Spielzustand pro Zelle
   - PK: `(GameId, RowIdx, ColIdx)`

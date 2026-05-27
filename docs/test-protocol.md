@@ -1,8 +1,13 @@
 # Test Protocol — Killer Sudoku
 
 **Stack:** .NET 10, Blazor Server, MS-SQL Express
-**Frameworks:** xUnit (Unit/Integration), bUnit (Component), FluentAssertions, WebApplicationFactory + Testcontainers-MSSQL (Integration-DB), Playwright .NET (E2E)
+**Frameworks:** xUnit (Unit/Integration), bUnit (Component), FluentAssertions, WebApplicationFactory + Testcontainers-MSSQL (Integration-DB) (WebApplicationFactory wird aktuell **nicht** verwendet; die Integration-Tests instanziieren Services direkt über eine `ServiceFactory` gegen den von `MsSqlContainerFixture` bereitgestellten Container), Playwright .NET (E2E)
 **Coverage-Ziel:** 80% Lines/Branches (via Coverlet)
+
+> **Update-Hinweis (Doku vs. Code-Stand):**
+> - Tatsächliche Methodenanzahl im `source/tests/`-Baum: **98** xUnit-Methoden ([Fact]: 94, [Theory]: 4). Die "Total 94"-Zeilen weiter unten reflektieren die ursprüngliche Planung; die zusätzlichen 4 Methoden entstanden bei TDD-Iterationen.
+> - Doppelte T-ID `T044` in `PuzzleServiceTests.cs`: einmal Sum-Check (Z. 72) und einmal Performance-Test (Z. 271). Die T-ID-Kollision ist bekannt und stört Coverage-Auswertung nicht; bei einer Konsolidierung wäre der Performance-Test als `T046` umzunummerieren.
+> - Bewusst angelegte semantische Duplikate: `T093 ≈ T087` (DB-Constraint TimeSeconds < 0), `T122 ≈ T051` (Filtered-Index Active-Game-Unique), `T045 ≈ T044` (Sum-Check) — sind im Code-Kommentar als "Semantisches Duplikat" markiert und decken den Pfad bewusst auf zwei Layern ab.
 
 ## Test-Type-Legende
 
@@ -222,7 +227,7 @@
 | Integration (I) | 42 | 45 % |
 | E2E (E) | 10 | 11 % |
 | Manual (M) | 5 | 5 % |
-| **Total** | **94** | 100 % |
+| **Total (geplant)** | **94** | 100 % · Realer Code-Stand: 98 Methoden ([Fact]: 94, [Theory]: 4) |
 
 ## Coverage-Validierung gegen README §3.1
 
@@ -245,7 +250,7 @@
 | UC13 Pause / Resume        | 6 | 4 | 1 | 1 (Multi-Cycle Akkumulation) | ✓ |
 | UC14 Pencil Marks          | 7 | 5 | 1 | 1 (9 Marks max) | ✓ |
 | Manual (cross-UC visual)   | 5 | — | — | — | n/a (visuell) |
-| **Total** | **94** | | | | **alle 14 UCs ✓** |
+| **Total (geplant)** | **94** | | | | **alle 14 UCs ✓** · realer Code: 98 Methoden |
 
 → README §3.1 Mindestanforderung pro UC erfüllt; UC01 ohne echten Boundary (Klausel "where possible" greift, statische Seite).
 

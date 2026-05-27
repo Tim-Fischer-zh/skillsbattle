@@ -22,61 +22,80 @@ Das System ist in **drei .NET-Projekte** aufgeteilt, jedes Projekt = ein Layer:
 classDiagram
     direction TB
 
-    %% ============ PRESENTATION ============
-    class PlayPuzzle {
-        +int PuzzleId
-        +OnInitializedAsync() Task
-        -HandleCellInput(int row, int col, int? v) Task
-        -HandleHintClick() Task
-        -HandleCheckClick() Task
+    %% ============ PRESENTATION (real existierende .razor-Dateien) ============
+    class App {
+        <<razor>>
+    }
+    class Routes {
+        <<razor>>
+    }
+    class MainLayout {
+        <<layout>>
+    }
+    class ReconnectModal {
+        <<layout>>
+    }
+    class RedirectToLogin {
+        <<razor>>
+        +OnInitialized() void
+    }
+    class Home {
+        <<page>>
+        +Route /
+    }
+    class Register {
+        <<page>>
+        +Route /register
+        -HandleSubmit() Task
+    }
+    class Login {
+        <<page>>
+        +Route /login
+        -HandleSubmit() Task
     }
     class EnterPuzzle {
+        <<page>>
+        +Route /puzzles/new
         -PuzzleInputDto Draft
         -HandleSave() Task
+        -HandleGenerate() Task
     }
-    class PuzzleList {
-        -int? FilterDifficulty
+    class Puzzles {
+        <<page>>
+        +Route /puzzles
+        -byte? FilterDifficulty
         -int Page
         -LoadAsync() Task
     }
+    class PlayPuzzle {
+        <<page>>
+        +Route /puzzles/:id/play
+        +int PuzzleId
+        -SemaphoreSlim _gate
+        -OnInitializedAsync() Task
+        -HandleCellInput(byte row, byte col, byte? v) Task
+        -HandleHintClick() Task
+        -HandleCheckClick() Task
+        -HandlePauseToggle() Task
+        -HandlePencilToggle(byte row, byte col, byte v) Task
+    }
     class Highscore {
+        <<page>>
+        +Route /highscore
         -List~HighscoreEntry~ Top
         -LoadAsync() Task
     }
-    class Login {
-        -LoginDto Form
-        -HandleSubmit() Task
+    class MiniSudokuExample {
+        <<shared>>
+        +bool ShowValues
     }
-    class Register {
-        -RegisterDto Form
-        -HandleSubmit() Task
+    class Error {
+        <<page>>
+        +Route /Error
     }
-    class Home {
-        +OnInitialized() void
-    }
-    class PuzzleGrid {
-        +int[,] Values
-        +Action~int,int,int?~ OnCellInput
-    }
-    class CageEditor {
-        +List~CageInputDto~ Cages
-        +Action~CageInputDto~ OnCageAdded
-    }
-    class HintButton {
-        +Action OnClick
-    }
-    class CheckSolutionButton {
-        +Action OnClick
-    }
-    class PauseButton {
-        +bool IsPaused
-        +Action OnToggle
-    }
-    class PencilMarkLayer {
-        +Dictionary~Cell,HashSet~int~~ Marks
-    }
-    class HighscoreTable {
-        +IReadOnlyList~HighscoreEntry~ Rows
+    class NotFound {
+        <<page>>
+        +Route /not-found
     }
 
     %% ============ APPLICATION SERVICES ============
@@ -185,12 +204,14 @@ classDiagram
     class HintLog
 
     %% ============ DEPENDENCIES ============
+    Home --> MiniSudokuExample
+    Routes --> MainLayout
     PlayPuzzle ..> IGameService
     PlayPuzzle ..> IHintService
     PlayPuzzle ..> SudokuDbContext
     EnterPuzzle ..> IPuzzleService
     EnterPuzzle ..> IPuzzleGenerator
-    PuzzleList ..> IPuzzleService
+    Puzzles ..> IPuzzleService
     Highscore ..> IHighscoreService
     Login ..> AspNetIdentity
     Register ..> AspNetIdentity
@@ -798,21 +819,25 @@ flowchart LR
 
 ## 8 Test-Klassen-Mapping
 
-Pro produktiver Klasse die zugehörige Test-Klasse:
+Pro produktiver Klasse die zugehörige Test-Klasse (Stand: Ist-Code unter `source/tests/`):
 
-| Production | Test-Klasse | Framework | Test-Typ |
-|-----------|-------------|-----------|----------|
-| `SolverService` | `SolverServiceTests` | xUnit | Unit |
+| Production-Klasse | Test-Klasse | Framework | Test-Typ |
+|-------------------|-------------|-----------|----------|
+| `PuzzleStructureValidator` | `PuzzleStructureValidatorTests` | xUnit | Unit |
+| `ScoreCalculator` | `ScoreCalculatorTests` | xUnit | Unit |
 | `SolutionValidator` | `SolutionValidatorTests` | xUnit | Unit |
-| `HintStrategies` | `HintStrategiesTests` | xUnit | Unit |
-| `AuthService` | `AuthServiceTests` | xUnit + EF InMemory | Unit / Integration |
-| `PuzzleService` | `PuzzleServiceTests` | xUnit + EF InMemory | Unit / Integration |
-| `GameService` | `GameServiceTests` | xUnit + EF InMemory | Unit / Integration |
-| `HintService` | `HintServiceTests` | xUnit + Mock Solver | Unit |
-| `HighscoreService` | `HighscoreServiceTests` | xUnit + Testcontainer-SQL | Integration |
-| `PuzzleGrid.razor` | `PuzzleGridTests` | bUnit | Component |
-| `HintButton.razor` | `HintButtonTests` | bUnit | Component |
-| `PlayPuzzle.razor` | `PlayPuzzleTests` | bUnit + Mock Services | Component |
-| `SudokuDbContext` (Schema) | `SchemaTests` | xUnit + Testcontainer-SQL | Integration |
+| `SolverService` | `SolverServiceTests` | xUnit | Unit |
+| `SudokuDbContext` (Schema/Constraints) | `DbConstraintTests` | xUnit + Testcontainers-MSSQL | Integration |
+| `GameService` | `GameServiceTests` | xUnit + Testcontainers-MSSQL | Integration |
+| `HighscoreService` | `HighscoreServiceTests` | xUnit + Testcontainers-MSSQL | Integration |
+| `HintService` | `HintServiceTests` | xUnit + Testcontainers-MSSQL | Integration |
+| `GameService` (PencilMarks) | `PencilMarkTests` | xUnit + Testcontainers-MSSQL | Integration |
+| `PuzzleService` | `PuzzleServiceTests` | xUnit + Testcontainers-MSSQL | Integration |
+| `Login.razor` / `Register.razor` | `AuthPagesTests` | bUnit + NSubstitute | Component |
+| `Home.razor` | `HomePageTests` | bUnit | Component |
+| `MiniSudokuExample.razor` | `MiniSudokuExampleTests` | bUnit | Component |
+| End-to-End User-Flows | `E2ETests` | Playwright .NET | E2E |
+
+> **Hinweis:** Es gibt aktuell **keinen** eigenen `PuzzleGeneratorTests`. `PuzzleGenerator` wird indirekt über `PuzzleServiceTests` und `SolverServiceTests` (Solver-Roundtrip auf generierten Puzzles) mit abgedeckt.
 
 Vollständige Test-Cases siehe [`test-protocol.md`](test-protocol.md).
