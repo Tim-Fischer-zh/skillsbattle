@@ -15,4 +15,5 @@ docs/**/_puppeteer.json
 
 # Internal session/validation outputs (not part of the submission)
 .skillsbattle/
-.claude/scheduled_tasks.lock
+.claude/
+.playwright-mcp/

@@ -1,3 +1,0 @@
-[     114ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://localhost:8080/favicon.ico:0
-[   28107ms] [INFO] [2026-05-27T12:10:51.851Z] Information: Normalizing '_blazor' to 'http://localhost:8080/_blazor'. @ http://localhost:8080/_framework/blazor.web.ej96puwv3k.js:0
-[   28117ms] [INFO] [2026-05-27T12:10:51.861Z] Information: WebSocket connected to ws://localhost:8080/_blazor?id=5rBl2V2jbOFTycDj-wD-VA. @ http://localhost:8080/_framework/blazor.web.ej96puwv3k.js:0
