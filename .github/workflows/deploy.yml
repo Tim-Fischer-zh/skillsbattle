@@ -39,7 +39,9 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GHCR_TOKEN }}
+          # GITHUB_TOKEN is auto-provided per workflow run and has
+          # packages: write via the permissions block above.
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build image
         env:
