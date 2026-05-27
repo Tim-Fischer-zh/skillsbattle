@@ -110,6 +110,30 @@ public class SolutionValidatorTests
     //
     // Konstruktion: TrivialSudoku, aber definiere eine Cage über (0,0)=1 und (1,1)=5 ... nope, must be duplicate.
     // Wir nehmen (0,0)=1 und (1,6)=1 — beides 1 im TrivialSudoku!
+    // T085 — Nonet-Duplicate Detection.
+    //   Shift-by-1 Latin Square: grid[r,c] = (r + c) % 9 + 1.
+    //     Row 0: 1 2 3 4 5 6 7 8 9
+    //     Row 1: 2 3 4 5 6 7 8 9 1
+    //     Row 2: 3 4 5 6 7 8 9 1 2
+    //     ...
+    //   Each row contains 1-9, each column contains 1-9 (valid Latin square),
+    //   Σ = 9 × 45 = 405 (sum-check passes).
+    //   BUT nonet 0 (rows 0-2, cols 0-2) = {1,2,3,2,3,4,3,4,5} → duplicates → invalid.
+    [Fact]
+    public void T085_Validate_NonetDuplicate_ReturnsNonetDuplicate()
+    {
+        var grid = new byte[9, 9];
+        for (int r = 0; r < 9; r++)
+            for (int c = 0; c < 9; c++)
+                grid[r, c] = (byte)((r + c) % 9 + 1);
+
+        var cages = TrivialSudoku.RowCages();
+        var result = _sut.Validate(grid, cages);
+
+        result.IsCorrect.Should().BeFalse();
+        result.FailReason.Should().Be(CheckFailReason.NonetDuplicate);
+    }
+
     [Fact]
     public void Validate_CageDuplicate_ReturnsCageDuplicate()
     {

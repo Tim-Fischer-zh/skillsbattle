@@ -21,6 +21,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.8" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\KillerSudoku.Core\KillerSudoku.Core.csproj" />
+    <ProjectReference Include="..\..\src\KillerSudoku.Data\KillerSudoku.Data.csproj" />
     <ProjectReference Include="..\..\src\KillerSudoku.Web\KillerSudoku.Web.csproj" />
   </ItemGroup>
 

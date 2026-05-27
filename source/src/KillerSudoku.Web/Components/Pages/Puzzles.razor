@@ -3,7 +3,13 @@
 @rendermode InteractiveServer
 @using KillerSudoku.Core.Abstractions
 @using KillerSudoku.Core.Models
+@using KillerSudoku.Data.Entities
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
 @inject IPuzzleService PuzzleSvc
+@inject AuthenticationStateProvider AuthState
+@inject UserManager<AppUser> UserMgr
+@inject NavigationManager Nav
 
 <PageTitle>Puzzles &middot; Killer Sudoku</PageTitle>
 
@@ -23,7 +29,7 @@
                         class="filter-pill @(IsActive(null) ? "filter-pill--active" : "")"
                         @onclick="() => SetFilter(null)">
                     Alle
-                    <span class="filter-pill__count">@_all.Count</span>
+                    <span class="filter-pill__count">@_grandTotal</span>
                 </button>
                 <button type="button"
                         class="filter-pill @(IsActive((byte)1) ? "filter-pill--active" : "")"
@@ -43,7 +49,7 @@
             </div>
         </div>
 
-        @if (Filtered.Count == 0)
+        @if (_items.Count == 0)
         {
             <div class="puzzles__empty">
                 <p>Keine Puzzles f&uuml;r diesen Filter gefunden.</p>
@@ -52,7 +58,7 @@
         else
         {
             <div class="puzzle-grid" data-testid="puzzle-grid">
-                @foreach (var p in Filtered)
+                @foreach (var p in _items)
                 {
                     <article class="puzzle-card" data-testid="puzzle-card" data-difficulty="@p.Difficulty">
                         <div class="puzzle-card__preview" aria-hidden="true">
@@ -80,37 +86,91 @@
                 }
             </div>
 
-            <nav class="pagination" aria-label="Pagination">
-                <button type="button" class="btn btn-ghost" disabled>&larr; Zur&uuml;ck</button>
-                <span class="pagination__info">Seite 1 von 1</span>
-                <button type="button" class="btn btn-ghost" disabled>Weiter &rarr;</button>
-            </nav>
+            @if (TotalPages > 1)
+            {
+                <nav class="pagination" aria-label="Pagination">
+                    <button type="button" class="btn btn-ghost"
+                            @onclick="GoPrev"
+                            disabled="@(_page <= 1)">&larr; Zur&uuml;ck</button>
+                    <span class="pagination__info">Seite @_page von @TotalPages</span>
+                    <button type="button" class="btn btn-ghost"
+                            @onclick="GoNext"
+                            disabled="@(_page >= TotalPages)">Weiter &rarr;</button>
+                </nav>
+            }
         }
     </div>
 </section>
 
 @code {
+    private const int PageSize = 12;
+
+    // URL-State (UC12 AC12.3): Filter ist deep-linkbar via /puzzles?difficulty=2
+    [SupplyParameterFromQuery(Name = "difficulty")]
+    public int? DifficultyParam { get; set; }
+
     private byte? _filter;
-    private IReadOnlyList<PuzzleSummary> _all = Array.Empty<PuzzleSummary>();
-    private bool _loaded;
+    private int _page = 1;
+    private int _total;        // total matching current filter
+    private int _grandTotal;   // total puzzles independent of filter — for "Alle" pill
+    private int? _currentUserId;
+    private IReadOnlyList<PuzzleSummary> _items = Array.Empty<PuzzleSummary>();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_total / (double)PageSize));
 
     private bool IsActive(byte? value) => _filter == value;
 
     protected override async Task OnInitializedAsync()
     {
-        var page = await PuzzleSvc.ListAsync(difficulty: null, page: 1, pageSize: 100);
-        _all = page.Items;
-        _loaded = true;
+        var auth = await AuthState.GetAuthenticationStateAsync();
+        var user = await UserMgr.GetUserAsync(auth.User);
+        _currentUserId = user?.Id;
+
+        // Grand-Total nur 1× laden (pageSize=1 → minimaler Roundtrip nur für Count)
+        var grand = await PuzzleSvc.ListAsync(
+            difficulty: null, page: 1, pageSize: 1, currentUserId: null);
+        _grandTotal = grand.Total;
+
+        // Initialer Filter aus Query-String (Deep-Linking)
+        _filter = ParseDifficultyParam(DifficultyParam);
+
+        await LoadAsync();
     }
 
     private async Task SetFilter(byte? value)
     {
         _filter = value;
-        var page = await PuzzleSvc.ListAsync(difficulty: value, page: 1, pageSize: 100);
-        _all = page.Items;
+        _page = 1;
+
+        // URL synchronisieren ohne SPA-Reload — Bookmark/Back-Button bleiben funktional.
+        var url = value is null ? "/puzzles" : $"/puzzles?difficulty={value}";
+        Nav.NavigateTo(url, forceLoad: false, replace: true);
+
+        await LoadAsync();
     }
 
-    private IReadOnlyList<PuzzleSummary> Filtered => _all;
+    private static byte? ParseDifficultyParam(int? raw)
+        => raw is int d && d is >= 1 and <= 3 ? (byte)d : null;
+
+    private Task GoPrev() { if (_page > 1) { _page--; return LoadAsync(); } return Task.CompletedTask; }
+    private Task GoNext() { if (_page < TotalPages) { _page++; return LoadAsync(); } return Task.CompletedTask; }
+
+    private async Task LoadAsync()
+    {
+        var result = await PuzzleSvc.ListAsync(
+            difficulty: _filter,
+            page: _page,
+            pageSize: PageSize,
+            currentUserId: _currentUserId);
+        _items = result.Items;
+        _total = result.Total;
+        // Defensiv: falls die Total nach einem Filter-Wechsel kleiner ist als _page erlaubt.
+        if (_page > TotalPages && TotalPages >= 1)
+        {
+            _page = TotalPages;
+            await LoadAsync();
+        }
+    }
 
     private static string FormatRelative(DateTime created)
     {

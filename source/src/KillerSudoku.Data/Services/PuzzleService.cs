@@ -85,7 +85,11 @@ public sealed class PuzzleService : IPuzzleService
 
     /// <summary>UC12 — Browse / Filter Puzzles. Paginated, neueste zuerst.</summary>
     public async Task<PagedResult<PuzzleSummary>> ListAsync(
-        byte? difficulty, int page, int pageSize, CancellationToken ct = default)
+        byte? difficulty,
+        int page,
+        int pageSize,
+        int? currentUserId = null,
+        CancellationToken ct = default)
     {
         if (page < 1 || pageSize < 1)
             return new PagedResult<PuzzleSummary>(Array.Empty<PuzzleSummary>(), 0, page, pageSize);
@@ -104,7 +108,16 @@ public sealed class PuzzleService : IPuzzleService
                 p.Difficulty,
                 p.CreatedBy.UserName ?? "?",
                 p.CreatedAt,
-                null))
+                // UC10 — best (= highest) completed Score for this user/puzzle.
+                // Returns null if the user is anonymous OR has never finished it.
+                currentUserId == null
+                    ? (int?)null
+                    : _db.Games
+                        .Where(g => g.PuzzleId == p.Id
+                                 && g.UserId == currentUserId.Value
+                                 && g.IsCompleted
+                                 && g.Score != null)
+                        .Max(g => (int?)g.Score)))
             .ToListAsync(ct);
 
         return new PagedResult<PuzzleSummary>(items, total, page, pageSize);

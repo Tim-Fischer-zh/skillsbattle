@@ -37,7 +37,7 @@
             </button>
         </div>
 
-        @if (Filtered.Count == 0)
+        @if (_all.Count == 0)
         {
             <div class="highscore__empty">
                 <p>Noch keine Resultate &mdash; sei der Erste!</p>
@@ -60,7 +60,7 @@
                     <tbody>
                         @{
                             var rank = 1;
-                            foreach (var e in Filtered)
+                            foreach (var e in _all)
                             {
                                 var rowClass = rank switch
                                 {
@@ -110,8 +110,6 @@
         _filter = value;
         _all = await HighscoreSvc.GetTopAsync(limit: 50, difficulty: value);
     }
-
-    private IReadOnlyList<HighscoreEntry> Filtered => _all;
 
     private static string GetInitial(string? name)
         => string.IsNullOrWhiteSpace(name) ? "?" : char.ToUpperInvariant(name[0]).ToString();

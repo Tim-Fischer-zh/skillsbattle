@@ -2,15 +2,18 @@
 
 **DB-Engine:** Microsoft SQL Server Express
 **Database-Name:** `sudoku`
-**ORM-Plan:** Entity Framework Core 10 (DbContext) ODER Dapper (lightweight) — Entscheidung noch offen, beeinflusst Integration-Tests aber nicht das Schema.
+**ORM:** Entity Framework Core 10 (`SudokuDbContext`) — Schema-Verwaltung via [`db/sudoku.sql`](../db/sudoku.sql); EF-Modellierung spiegelt das SQL-Schema (kein `dotnet ef migrations` aktiv).
+**Auth-Schema:** ASP.NET Core Identity. `AppUser` erbt von `IdentityUser<int>`. Zusätzlich zu den Kern-Tabellen unten sind die Identity-Hilfstabellen `AspNetRoles`, `AspNetUserClaims`, `AspNetUserLogins`, `AspNetUserTokens`, `AspNetUserRoles`, `AspNetRoleClaims` Teil des Schemas (siehe `db/sudoku.sql`).
 
 ## ERD (Mermaid)
+
+Das Diagramm zeigt die fachlichen Killer-Sudoku-Tabellen plus `AppUser`. Die Identity-Hilfstabellen sind in §"Identity-Hilfstabellen" beschrieben und werden im ERD bewusst weggelassen, um die Domain-Sicht zu erhalten.
 
 ```mermaid
 erDiagram
     AppUser   ||--o{ Puzzle    : creates
     AppUser   ||--o{ Game      : plays
-    Puzzle    ||--o{ Cage      : contains
+    Puzzle    ||--|{ Cage      : contains
     Puzzle    ||--o{ Game      : "is played in"
     Cage      ||--|{ CageCell  : has
     Game      ||--|{ GameCell  : has
@@ -18,10 +21,21 @@ erDiagram
     Game      ||--o{ HintLog   : logs
 
     AppUser {
-        int      Id           PK
-        nvarchar Username     UK
-        nvarchar Email        UK
-        nvarchar PasswordHash
+        int       Id                    PK
+        nvarchar  UserName              UK_nullable
+        nvarchar  NormalizedUserName    UK_nullable
+        nvarchar  Email                 UK_nullable
+        nvarchar  NormalizedEmail
+        bit       EmailConfirmed
+        nvarchar  PasswordHash          nullable
+        nvarchar  SecurityStamp         nullable
+        nvarchar  ConcurrencyStamp      nullable
+        nvarchar  PhoneNumber           nullable
+        bit       PhoneNumberConfirmed
+        bit       TwoFactorEnabled
+        datetimeoffset LockoutEnd       nullable
+        bit       LockoutEnabled
+        int       AccessFailedCount
         datetime2 CreatedAt
     }
     Puzzle {
@@ -45,20 +59,20 @@ erDiagram
         int       UserId             FK
         int       PuzzleId           FK
         datetime2 StartTime
-        datetime2 EndTime
-        int       TimeSeconds
+        datetime2 EndTime            nullable
+        int       TimeSeconds        nullable
         int       HintsUsed
-        int       Score
+        int       Score              nullable
         bit       IsCompleted
         bit       IsPaused
-        datetime2 PausedAt
+        datetime2 PausedAt           nullable
         int       TotalPausedSeconds
     }
     GameCell {
-        int     GameId   PK,FK
-        tinyint RowIdx   PK
-        tinyint ColIdx   PK
-        tinyint CellValue
+        int     GameId    PK,FK
+        tinyint RowIdx    PK
+        tinyint ColIdx    PK
+        tinyint CellValue nullable
     }
     PencilMark {
         int     GameId    PK,FK
@@ -74,6 +88,8 @@ erDiagram
         datetime2 HintAt
     }
 ```
+
+> **Anmerkung Kardinalitäten:** `Puzzle ||--|{ Cage` (1..*): ein valide gespeichertes Puzzle hat mindestens einen Cage (insgesamt 81 Zellen müssen abgedeckt sein). DB-seitig garantiert dies aktuell nicht ein expliziter Constraint, sondern die Application-Validation in `PuzzleStructureValidator` (siehe [`validation.md`](validation.md#v06--cage-struktur-uc04) V06).
 
 ## Design-Entscheidungen
 

@@ -2,18 +2,27 @@ using KillerSudoku.Core.Models;
 
 namespace KillerSudoku.Core.Abstractions;
 
-public interface IAuthService
-{
-    Task<SavePuzzleResult> RegisterAsync(RegisterDto input, CancellationToken ct = default);
-    Task<bool> LoginAsync(LoginDto input, CancellationToken ct = default);
-    Task LogoutAsync(int userId, CancellationToken ct = default);
-}
+// UC02 Registrierung + UC03 Login werden direkt über ASP.NET Core Identity
+// (UserManager<AppUser> / SignInManager<AppUser>) in den Razor-Pages
+// abgewickelt — kein eigener IAuthService-Wrapper.
 
 public interface IPuzzleService
 {
     Task<ValidationResult> ValidateStructureAsync(PuzzleInputDto input, CancellationToken ct = default);
     Task<SavePuzzleResult> SaveIfSolvableAsync(PuzzleInputDto input, int userId, CancellationToken ct = default);
-    Task<PagedResult<PuzzleSummary>> ListAsync(byte? difficulty, int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>
+    /// UC12 — paginated list with optional difficulty filter. When
+    /// <paramref name="currentUserId"/> is provided the projection populates
+    /// <see cref="PuzzleSummary.MyBestScore"/> from the caller's completed games.
+    /// </summary>
+    Task<PagedResult<PuzzleSummary>> ListAsync(
+        byte? difficulty,
+        int page,
+        int pageSize,
+        int? currentUserId = null,
+        CancellationToken ct = default);
+
     Task<PuzzleInputDto?> GetByIdAsync(int puzzleId, CancellationToken ct = default);
 }
 

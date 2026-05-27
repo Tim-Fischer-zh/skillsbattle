@@ -105,6 +105,52 @@ public class SolverServiceTests
         sw.ElapsedMilliseconds.Should().BeLessThan(2000);
     }
 
+    // T101 — Example-2: zweites bekanntes Solver-Beispiel hat genau 1 Lösung.
+    //   Wir verwenden den deterministischen PuzzleGenerator mit fixem Seed als
+    //   "bekanntes Beispiel-2" — Generator validiert vor Rückgabe selbst dass
+    //   Solutions == 1.
+    [Fact]
+    public void T101_Solve_Example2_HasExactlyOneSolution()
+    {
+        var generator = new PuzzleGenerator(_sut);
+        var puzzle = generator.Generate(difficulty: 1, rng: new Random(777));
+
+        var result = _sut.Solve(new byte[9, 9], puzzle.Cages);
+
+        result.Solutions.Should().Be(1);
+        result.Solution.Should().NotBeNull();
+        _validator.Validate(result.Solution!, puzzle.Cages).IsCorrect.Should().BeTrue();
+    }
+
+    // T106 — Cage-Duplikat-Erkennung im Solver-Backtracking.
+    //   Cage = [(0,0), (0,1)] mit Sum=10. Givens (0,0)=5 würde (0,1)=5 erzwingen
+    //   damit die Cage-Sum stimmt — das verletzt aber das Cage-Distinct-Constraint.
+    //   Solver muss den Branch verwerfen → keine Lösung.
+    [Fact]
+    public void T106_Solve_CageDuplicateBranch_IsRejected()
+    {
+        var givens = new byte[9, 9];
+        givens[0, 0] = 5;
+        var cages = new List<CageInputDto>
+        {
+            new CageInputDto(10, new List<(byte, byte)> { (0, 0), (0, 1) }),
+        };
+        var row0Rest = new List<(byte, byte)>();
+        for (byte c = 2; c < 9; c++) row0Rest.Add(((byte)0, c));
+        cages.Add(new CageInputDto(35, row0Rest)); // 45 - 10
+        for (byte r = 1; r < 9; r++)
+        {
+            var cells = new List<(byte, byte)>();
+            for (byte c = 0; c < 9; c++) cells.Add((r, c));
+            cages.Add(new CageInputDto(45, cells));
+        }
+
+        var result = _sut.Solve(givens, cages);
+
+        // (0,1) muss 5 sein damit Sum=10, aber Cage-Distinct verbietet das → 0 Lösungen.
+        result.Solutions.Should().Be(0);
+    }
+
     // T095 — Cage-Distinct-Constraint: Cage [(0,0),(0,1)] Sum=10 mit givens (0,0)=5 → (0,1) NICHT 5
     [Fact]
     public void Solve_CageDistinctConstraint_ExcludesDuplicateWithinCage()

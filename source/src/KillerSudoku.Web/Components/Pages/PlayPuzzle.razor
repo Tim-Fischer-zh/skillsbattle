@@ -1,6 +1,7 @@
 @page "/puzzles/{PuzzleId:int}/play"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @rendermode InteractiveServer
+@implements IDisposable
 @using KillerSudoku.Core.Abstractions
 @using KillerSudoku.Core.Models
 @using KillerSudoku.Data.Entities
@@ -168,7 +169,13 @@ else
     private bool _isComplete;
     private string? _message;
     private bool _messageIsError;
-    private DateTime _renderTime = DateTime.UtcNow;
+
+    // Serialisiert alle Operationen die den per-Circuit Scoped SudokuDbContext anfassen.
+    // Blazor-Server teilt einen Context-Instance pro Circuit; ohne Gate kollidieren
+    // schnell hintereinander geklickte Aktionen ("A second operation was started ...").
+    private readonly SemaphoreSlim _gate = new(1, 1);
+
+    public void Dispose() => _gate.Dispose();
 
     private readonly Dictionary<(byte, byte), CellState> _cells = new();
     private readonly Dictionary<(byte, byte), int> _cellToCageId = new();
@@ -264,32 +271,43 @@ else
     private async Task InputNumberAsync(byte n)
     {
         if (_activeCell is null || _game is null) return;
-        var (r, c) = _activeCell.Value;
-        ClearMessage();
+        await _gate.WaitAsync();
+        try
+        {
+            var (r, c) = _activeCell.Value;
+            ClearMessage();
 
-        if (_pencilMode)
-            await GameSvc.TogglePencilMarkAsync(_game.Id, r, c, n);
-        else
-            await GameSvc.SetCellValueAsync(_game.Id, r, c, n);
+            if (_pencilMode)
+                await GameSvc.TogglePencilMarkAsync(_game.Id, r, c, n);
+            else
+                await GameSvc.SetCellValueAsync(_game.Id, r, c, n);
 
-        await ReloadAsync();
+            await ReloadAsync();
+        }
+        finally { _gate.Release(); }
     }
 
     private async Task EraseActiveAsync()
     {
         if (_activeCell is null || _game is null) return;
-        var (r, c) = _activeCell.Value;
-        ClearMessage();
-        await GameSvc.SetCellValueAsync(_game.Id, r, c, null);
-        await ReloadAsync();
+        await _gate.WaitAsync();
+        try
+        {
+            var (r, c) = _activeCell.Value;
+            ClearMessage();
+            await GameSvc.SetCellValueAsync(_game.Id, r, c, null);
+            await ReloadAsync();
+        }
+        finally { _gate.Release(); }
     }
 
     private async Task HintAsync()
     {
         if (_game is null) return;
-        ClearMessage();
+        await _gate.WaitAsync();
         try
         {
+            ClearMessage();
             var hint = await HintSvc.GetHintAsync(_game.Id);
             _message = $"💡 Hint: Zelle ({hint.Row},{hint.Col}) = {hint.Value} (Strategy: {hint.Strategy})";
             _messageIsError = false;
@@ -297,51 +315,80 @@ else
             await ReloadAsync();
         }
         catch (Exception ex) { _message = $"Hint nicht verfügbar: {ex.Message}"; _messageIsError = true; }
+        finally { _gate.Release(); }
     }
 
     private async Task PauseToggleAsync()
     {
         if (_game is null) return;
-        if (_isPaused) await ResumeAsync();
-        else { await GameSvc.PauseAsync(_game.Id); _isPaused = true; await ReloadAsync(); }
+        if (_isPaused)
+        {
+            await ResumeAsync();
+            return;
+        }
+
+        await _gate.WaitAsync();
+        try
+        {
+            await GameSvc.PauseAsync(_game.Id);
+            _isPaused = true;
+            await ReloadAsync();
+        }
+        finally { _gate.Release(); }
     }
 
     private async Task ResumeAsync()
     {
         if (_game is null) return;
-        await GameSvc.ResumeAsync(_game.Id);
-        _isPaused = false;
-        await ReloadAsync();
+        await _gate.WaitAsync();
+        try
+        {
+            await GameSvc.ResumeAsync(_game.Id);
+            _isPaused = false;
+            await ReloadAsync();
+        }
+        finally { _gate.Release(); }
     }
 
     private async Task CheckAsync()
     {
         if (_game is null) return;
-        ClearMessage();
-        var result = await GameSvc.CheckSolutionAsync(_game.Id);
-        if (result.IsCorrect)
+        await _gate.WaitAsync();
+        bool navigate = false;
+        try
         {
-            int score = await GameSvc.CompleteGameAsync(_game.Id);
-            _message = $"🎉 Geschafft! Score: {score}";
-            _messageIsError = false;
-            _isComplete = false;
+            ClearMessage();
+            var result = await GameSvc.CheckSolutionAsync(_game.Id);
+            if (result.IsCorrect)
+            {
+                int score = await GameSvc.CompleteGameAsync(_game.Id);
+                _message = $"🎉 Geschafft! Score: {score}";
+                _messageIsError = false;
+                _isComplete = false;
+                navigate = true;
+            }
+            else
+            {
+                _message = result.FailReason switch
+                {
+                    CheckFailReason.SumMismatch => "Lösung falsch: Summe der Zellen ≠ 405.",
+                    CheckFailReason.Incomplete => "Bitte zuerst alle Felder ausfüllen.",
+                    CheckFailReason.RowDuplicate => "Lösung falsch: Doppelte Zahl in einer Reihe.",
+                    CheckFailReason.ColumnDuplicate => "Lösung falsch: Doppelte Zahl in einer Spalte.",
+                    CheckFailReason.NonetDuplicate => "Lösung falsch: Doppelte Zahl in einem 3×3-Block.",
+                    CheckFailReason.CageSumMismatch => "Lösung falsch: Eine Cage-Summe stimmt nicht.",
+                    CheckFailReason.CageDuplicate => "Lösung falsch: Doppelte Zahl innerhalb einer Cage.",
+                    _ => "Lösung ist nicht korrekt."
+                };
+                _messageIsError = true;
+            }
+        }
+        finally { _gate.Release(); }
+
+        if (navigate)
+        {
             await Task.Delay(1500);
             Nav.NavigateTo("/highscore");
-        }
-        else
-        {
-            _message = result.FailReason switch
-            {
-                CheckFailReason.SumMismatch => "Lösung falsch: Summe der Zellen ≠ 405.",
-                CheckFailReason.Incomplete => "Bitte zuerst alle Felder ausfüllen.",
-                CheckFailReason.RowDuplicate => "Lösung falsch: Doppelte Zahl in einer Reihe.",
-                CheckFailReason.ColumnDuplicate => "Lösung falsch: Doppelte Zahl in einer Spalte.",
-                CheckFailReason.NonetDuplicate => "Lösung falsch: Doppelte Zahl in einem 3×3-Block.",
-                CheckFailReason.CageSumMismatch => "Lösung falsch: Eine Cage-Summe stimmt nicht.",
-                CheckFailReason.CageDuplicate => "Lösung falsch: Doppelte Zahl innerhalb einer Cage.",
-                _ => "Lösung ist nicht korrekt."
-            };
-            _messageIsError = true;
         }
     }
 
