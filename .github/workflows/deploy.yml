@@ -76,8 +76,7 @@ jobs:
       - name: Smoke-test live endpoint
         run: |
           for i in $(seq 1 20); do
-            if curl -fsS --max-time 5 https://web17skill.com/health; then
-              echo
+            if curl -fsS --max-time 5 -o /dev/null https://web17skill.com/; then
               echo "✓ live endpoint healthy"
               exit 0
             fi
