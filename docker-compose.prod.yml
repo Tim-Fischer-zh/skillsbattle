@@ -1,30 +1,57 @@
 # =============================================================================
 # Production compose for the VPS deployment.
-# - Pulls pre-built image from GHCR (no local build on the VPS)
-# - Binds host port 80 → container port 8080, which is what the cloudflared
-#   tunnel forwards to (Cloudflare terminates TLS, plain HTTP to localhost:80)
-# - SQL Server port is intentionally NOT published (DB is internal)
-# - Restart-on-failure for unattended operation
+#
+# Architecture: 2 services (db + app), wired via the default compose network.
+#   - db:           MS-SQL Server 2022 Express; schema deployed once from
+#                   db/sudoku.sql via scripts/db-init.sh (idempotent marker file)
+#   - killersudoku: Blazor Server app, pulled from GHCR, talks to "db" by name
+#
+# Triggered by .github/workflows/deploy.yml, which writes a one-shot .env with
+# MSSQL_SA_PASSWORD from GitHub Secrets just before `compose up -d`.
+#
+# Networking:
+#   - App port: 127.0.0.1:80 → 8080 (cloudflared on the same host bridges TLS)
+#   - DB port:  NOT published — only reachable inside the compose network
 # =============================================================================
 services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: killersudoku-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD must be set in .env}
+    volumes:
+      - mssql-data:/var/opt/mssql
+      - ./db/sudoku.sql:/docker-init/sudoku.sql:ro
+      - ./scripts/db-init.sh:/docker-init/db-init.sh:ro
+    entrypoint: ["/bin/bash", "/docker-init/db-init.sh"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -d sudoku -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+
   killersudoku:
     image: ghcr.io/tim-fischer-zh/killer-sudoku:latest
     container_name: killersudoku
-    # No pull_policy — image is built locally on the self-hosted runner
-    # and we want compose to use that local copy, not re-pull from GHCR.
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
-      - "127.0.0.1:80:8080"   # only loopback — cloudflared lives on the same host
+      - "127.0.0.1:80:8080"
     environment:
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD must be set in .env}
-      MSSQL_PID: Express
-      ACCEPT_EULA: "Y"
       ASPNETCORE_URLS: http://+:8080
       ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Sudoku: "Server=db,1433;Database=sudoku;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True;MultipleActiveResultSets=true"
+      DATAPROTECTION_KEYS_DIR: /var/app-data/.dpkeys
     volumes:
-      - mssql-data:/var/opt/mssql
+      - app-data:/var/app-data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/"]
       interval: 30s
       timeout: 5s
       start_period: 90s
@@ -32,3 +59,4 @@ services:
 
 volumes:
   mssql-data:
+  app-data:
