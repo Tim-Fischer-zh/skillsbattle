@@ -76,6 +76,8 @@ UC08 (Show High Score) zeigt die Top-N abgeschlossenen Games sortiert nach Score
 - (+) `WHERE g.IsCompleted = 1 AND g.Score IS NOT NULL` stellt sicher, dass nur abgeschlossene Spiele erscheinen — passt zu [UC10 AC10.3](../use-cases.md#uc10--save-result)
 - (−) Performance: bei sehr vielen Games (>10⁶) wäre View langsamer als materialisierte Tabelle. Für die Wettbewerbs-Submission (lokales Setup, wenige Spiele) irrelevant.
 - (−) Pagination der View erfordert `OFFSET/FETCH` in jeder Abfrage statt vorberechneter Sortierung
+- **Implementierungs-Realität:** Der `HighscoreService` liest aktuell **nicht** über die View, sondern direkt über LINQ-Joins (`_db.Games ⋈ AppUser ⋈ Puzzle WHERE IsCompleted = 1`). Der `SudokuDbContext` mappt `vw_Highscore` nicht als Keyless-Entity. Die View bleibt im SQL-Schema als Reserve — ein späterer Wechsel auf `FromSqlRaw("SELECT … FROM vw_Highscore")` oder einen Keyless-DbSet ist möglich, ohne dass das Schema geändert werden muss.
+- Trade-Off-Begründung: LINQ erlaubt typsicheren Difficulty-Filter (`GetTopAsync(limit, byte? difficulty)`), Order-Stabilität (`OrderByDescending(Score).ThenBy(TimeSeconds)`) und Rank-Vergabe direkt im C#-Code. Bei wachsender Datenmenge oder Bedarf an View-Wartbarkeit ist Re-Mapping auf `vw_Highscore` der nächste sinnvolle Schritt.
 
 ---
 
@@ -127,6 +129,8 @@ END;
 - Begründung im Kommentar des SQL-Skripts (Zeile 84–86): "Constraint 'jede Zelle pro Puzzle in genau einem Cage' wird über einen INSTEAD-OF-Trigger durchgesetzt"
 
 > **Anmerkung zum SQL-Kommentar:** Der Kommentar im Skript spricht von "INSTEAD-OF-Trigger", umgesetzt wird tatsächlich ein `AFTER INSERT, UPDATE` Trigger. Funktional identisch (Rollback bei Konflikt), aber Wording im Kommentar bleibt zur Konsistenz mit dem Submission-File.
+
+> **Anmerkung zum EF-Modell:** Der Trigger `trg_CageCell_UniquePerPuzzle` lebt ausschließlich im SQL-Skript `db/sudoku.sql`. Er ist im `SudokuDbContext` (`OnModelCreating`) **nicht** als HasTrigger-Konfiguration oder Migration-Operation modelliert. Konsequenz: Wer die Datenbank ausschließlich über `EnsureCreated()` oder eine künftige EF-Migration aufsetzt, würde den Trigger nicht erhalten. Die aktuelle Submission setzt das Schema immer über `sudoku.sql` (Container-Entrypoint oder manueller `sqlcmd`-Aufruf), daher ist der Trigger im Lauf garantiert.
 
 ---
 

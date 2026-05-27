@@ -4,6 +4,8 @@
 > **Stack:** .NET 10, Blazor Server, EF Core 10, MS-SQL Express
 > **Querverweise:** [`functionality.md`](functionality.md) (autoritative Service-Signaturen) · [`erm.md`](erm.md) (Daten-Modell) · [`use-cases.md`](use-cases.md)
 
+> **Update-Hinweis:** Dieses Diagramm wurde an den Ist-Code synchronisiert. UC02/UC03 verwenden direkt ASP.NET Core Identity (`UserManager`/`SignInManager`), es existiert kein eigener `IAuthService`. UI-Logik ist inline in den Pages (keine Sub-Component-Razor-Dateien für Grid/Toolbar/Editor).
+
 Das System ist in **drei .NET-Projekte** aufgeteilt, jedes Projekt = ein Layer:
 
 | Projekt | Layer | Verantwortung |
@@ -352,41 +354,27 @@ Use-Case-Orchestrierung. Jeder Service implementiert genau ein Interface (für M
 classDiagram
     direction LR
 
-    class IAuthService {
-        <<interface>>
-        +RegisterAsync(RegisterDto) Task~RegisterResult~
-        +LoginAsync(LoginDto) Task~LoginResult~
-        +LogoutAsync(int userId) Task
-    }
-    class AuthService {
-        -SudokuDbContext _db
-        -IPasswordHasher _hasher
-        +RegisterAsync(RegisterDto) Task~RegisterResult~
-        +LoginAsync(LoginDto) Task~LoginResult~
-        +LogoutAsync(int userId) Task
-    }
-
     class IPuzzleService {
         <<interface>>
         +ValidateStructureAsync(PuzzleInputDto) Task~ValidationResult~
         +SaveIfSolvableAsync(PuzzleInputDto, int userId) Task~SavePuzzleResult~
-        +ListAsync(int? difficulty, int page, int pageSize) Task~PageResult~PuzzleListItem~~
-        +GetByIdAsync(int puzzleId) Task~PuzzleDto~
+        +ListAsync(byte? difficulty, int page, int pageSize, int? currentUserId) Task~PagedResult~PuzzleSummary~~
+        +GetByIdAsync(int puzzleId) Task~PuzzleInputDto?~
     }
     class PuzzleService {
         -SudokuDbContext _db
         -ISolverService _solver
         +ValidateStructureAsync(PuzzleInputDto) Task~ValidationResult~
         +SaveIfSolvableAsync(PuzzleInputDto, int userId) Task~SavePuzzleResult~
-        +ListAsync(int? difficulty, int page, int pageSize) Task~PageResult~PuzzleListItem~~
-        +GetByIdAsync(int puzzleId) Task~PuzzleDto~
+        +ListAsync(byte? difficulty, int page, int pageSize, int? currentUserId) Task~PagedResult~PuzzleSummary~~
+        +GetByIdAsync(int puzzleId) Task~PuzzleInputDto?~
     }
 
     class IGameService {
         <<interface>>
         +StartGameAsync(int userId, int puzzleId) Task~int~
-        +SetCellValueAsync(int gameId, int row, int col, int? v) Task
-        +TogglePencilMarkAsync(int gameId, int row, int col, int mark) Task
+        +SetCellValueAsync(int gameId, byte row, byte col, byte? v) Task
+        +TogglePencilMarkAsync(int gameId, byte row, byte col, byte mark) Task
         +PauseAsync(int gameId) Task
         +ResumeAsync(int gameId) Task
         +CheckSolutionAsync(int gameId) Task~CheckResult~
@@ -395,14 +383,14 @@ classDiagram
     class GameService {
         -SudokuDbContext _db
         -SolutionValidator _validator
+        -IScoreCalculator _score
         +StartGameAsync(int userId, int puzzleId) Task~int~
-        +SetCellValueAsync(int gameId, int row, int col, int? v) Task
-        +TogglePencilMarkAsync(int gameId, int row, int col, int mark) Task
+        +SetCellValueAsync(int gameId, byte row, byte col, byte? v) Task
+        +TogglePencilMarkAsync(int gameId, byte row, byte col, byte mark) Task
         +PauseAsync(int gameId) Task
         +ResumeAsync(int gameId) Task
         +CheckSolutionAsync(int gameId) Task~CheckResult~
         +CompleteGameAsync(int gameId) Task~int~
-        -CalcScore(int seconds, int hints) int
     }
 
     class IHintService {
@@ -412,20 +400,19 @@ classDiagram
     class HintService {
         -SudokuDbContext _db
         -ISolverService _solver
-        -HintStrategies _strategies
         +GetHintAsync(int gameId) Task~HintResult~
     }
 
     class IHighscoreService {
         <<interface>>
-        +GetTopAsync(int limit) Task~IReadOnlyList~HighscoreEntry~~
+        +GetTopAsync(int limit, byte? difficulty) Task~IReadOnlyList~HighscoreEntry~~
     }
     class HighscoreService {
         -SudokuDbContext _db
-        +GetTopAsync(int limit) Task~IReadOnlyList~HighscoreEntry~~
+        +GetTopAsync(int limit, byte? difficulty) Task~IReadOnlyList~HighscoreEntry~~
     }
+    note for HighscoreService "LINQ-Join über Games/AppUser/Puzzle,\nvw_Highscore im Schema vorhanden aber ungenutzt."
 
-    IAuthService <|.. AuthService
     IPuzzleService <|.. PuzzleService
     IGameService <|.. GameService
     IHintService <|.. HintService
@@ -440,7 +427,7 @@ classDiagram
 |---------|-----------|
 | `PuzzleService.SaveIfSolvableAsync` | persistiert nur wenn `_solver.CountSolutions(...) == 1` (Spec UC5 + UC4 "unique") |
 | `GameService.CheckSolutionAsync` | Reihenfolge: (1) `CheckSumIs405`, (2) Row/Col/Nonet, (3) Cage — billig→teuer |
-| `GameService.CompleteGameAsync` | Score = `max(0, 10000 − TimeSeconds − HintsUsed × 300)` |
+| `GameService.CompleteGameAsync` | Score = `IScoreCalculator.Calculate(TimeSeconds, HintsUsed)`; `TimeSeconds = max(0, (EndTime − StartTime) − TotalPausedSeconds)` |
 | `HintService.GetHintAsync` | inkrementiert `Game.HintsUsed`, schreibt `HintLog`-Eintrag |
 
 ---
@@ -453,51 +440,25 @@ Alle DTOs sind C#-`record`s (immutable, `with`-Syntax, value-based equality → 
 classDiagram
     direction TB
 
-    class RegisterDto {
-        <<record>>
-        +string Username
-        +string Email
-        +string Password
-        +string PasswordConfirm
-    }
-    class LoginDto {
-        <<record>>
-        +string UsernameOrEmail
-        +string Password
-    }
     class PuzzleInputDto {
         <<record>>
-        +int Difficulty
+        +byte Difficulty
         +IReadOnlyList~CageInputDto~ Cages
     }
     class CageInputDto {
         <<record>>
-        +int Sum
+        +byte Sum
         +IReadOnlyList~CellCoord~ Cells
     }
     class CellCoord {
         <<record>>
-        +int Row
-        +int Col
+        +byte Row
+        +byte Col
     }
-    class PuzzleDto {
+    class PuzzleSummary {
         <<record>>
         +int Id
-        +int Difficulty
-        +string CreatedByUsername
-        +DateTime CreatedAt
-        +IReadOnlyList~CageDto~ Cages
-    }
-    class CageDto {
-        <<record>>
-        +int Id
-        +int Sum
-        +IReadOnlyList~CellCoord~ Cells
-    }
-    class PuzzleListItem {
-        <<record>>
-        +int Id
-        +int Difficulty
+        +byte Difficulty
         +string CreatedBy
         +DateTime CreatedAt
         +int? MyBestScore
@@ -505,57 +466,64 @@ classDiagram
     class HighscoreEntry {
         <<record>>
         +int Rank
+        +int GameId
         +string Username
-        +int Difficulty
+        +byte Difficulty
         +int TimeSeconds
         +int HintsUsed
         +int Score
         +DateTime CompletedAt
     }
-    class RegisterResult {
-        <<record>>
-        +bool Success
-        +int? UserId
-        +string[] Errors
-    }
-    class LoginResult {
-        <<record>>
-        +bool Success
-        +int? UserId
-        +string? Username
-        +string[] Errors
-    }
     class SavePuzzleResult {
         <<record>>
-        +bool Saved
+        +SaveStatus Status
         +int? PuzzleId
-        +SaveFailReason? FailReason
     }
-    class SaveFailReason {
+    class SaveStatus {
         <<enumeration>>
-        StructureInvalid
-        Unsolvable
+        Saved
+        NotSolvable
         MultipleSolutions
+        InvalidStructure
     }
     class ValidationResult {
         <<record>>
         +bool IsValid
-        +string[] Errors
+        +string? Error
     }
-    class PageResult~T~ {
+    class PagedResult~T~ {
         <<record>>
         +IReadOnlyList~T~ Items
-        +int TotalCount
+        +int Total
         +int Page
         +int PageSize
+    }
+    class HintResult {
+        <<record>>
+        +byte Row
+        +byte Col
+        +byte Value
+        +HintStrategy Strategy
+    }
+    class HintStrategy {
+        <<enumeration>>
+        NakedSingle
+        CageForced
+        SolverFallback
+    }
+    class CheckResult {
+        <<record>>
+        +bool IsCorrect
+        +CheckFailReason? FailReason
     }
 
     PuzzleInputDto --> CageInputDto
     CageInputDto --> CellCoord
-    PuzzleDto --> CageDto
-    CageDto --> CellCoord
-    SavePuzzleResult --> SaveFailReason
+    SavePuzzleResult --> SaveStatus
+    HintResult --> HintStrategy
 ```
+
+> **Hinweis:** Register und Login verwenden direkt Identity-`IdentityResult` / `SignInResult` — keine eigenen DTOs im `KillerSudoku.Core/Models`.
 
 ---
 
@@ -568,7 +536,7 @@ classDiagram
     direction TB
 
     class SudokuDbContext {
-        +DbSet~AppUser~ AppUsers
+        <<IdentityDbContext~AppUser, IdentityRole~int~, int~>>
         +DbSet~Puzzle~ Puzzles
         +DbSet~Cage~ Cages
         +DbSet~CageCell~ CageCells
@@ -576,15 +544,11 @@ classDiagram
         +DbSet~GameCell~ GameCells
         +DbSet~PencilMark~ PencilMarks
         +DbSet~HintLog~ HintLogs
-        +DbSet~HighscoreEntry~ HighscoreView
         #OnModelCreating(ModelBuilder b) void
     }
 
     class AppUser {
-        +int Id
-        +string Username
-        +string Email
-        +string PasswordHash
+        <<IdentityUser~int~>>
         +DateTime CreatedAt
         +ICollection~Puzzle~ CreatedPuzzles
         +ICollection~Game~ Games
@@ -617,9 +581,9 @@ classDiagram
         +int PuzzleId
         +DateTime StartTime
         +DateTime? EndTime
-        +int TimeSeconds
+        +int? TimeSeconds
         +int HintsUsed
-        +int Score
+        +int? Score
         +bool IsCompleted
         +bool IsPaused
         +DateTime? PausedAt
@@ -673,9 +637,10 @@ classDiagram
 
 **Bemerkungen:**
 
-- `HighscoreView` ist als **Keyless-Entity** registriert (Mapping zu `vw_Highscore`).
+- `AppUser` erbt von `IdentityUser<int>` — die Identity-Standardfelder (`UserName`, `Email`, `PasswordHash`, `NormalizedUserName`, `NormalizedEmail`, `EmailConfirmed`, `SecurityStamp`, `ConcurrencyStamp`, `PhoneNumber`, `PhoneNumberConfirmed`, `TwoFactorEnabled`, `LockoutEnd`, `LockoutEnabled`, `AccessFailedCount`) werden geerbt und sind im Diagramm nicht einzeln aufgeführt; siehe [`erm.md`](erm.md).
+- **`vw_Highscore` existiert im SQL-Schema** (`db/sudoku.sql`), wird vom DbContext aktuell **nicht** gemappt. `HighscoreService` liest stattdessen mit LINQ-Joins über `Games ⋈ AppUser ⋈ Puzzle`.
 - `CageCell` / `GameCell` / `PencilMark` haben **Composite PK** (siehe `sudoku.sql`).
-- Trigger `trg_CageCell_UniquePerPuzzle` lebt in SQL, **nicht** in C#.
+- Trigger `trg_CageCell_UniquePerPuzzle` lebt in SQL (`db/sudoku.sql`), ist **NICHT** im EF-Modell konfiguriert; greift nur, wenn das Schema via Skript aufgesetzt wurde.
 
 ---
 
@@ -694,37 +659,31 @@ classDiagram
         #StateHasChanged() void
     }
 
-    class MainLayout {
-        -bool IsAuthenticated
-    }
-    class NavMenu {
-        +string? CurrentUserName
-    }
+    %% Root
+    class App
+    class Routes
+    class RedirectToLogin
 
+    %% Layout/
+    class MainLayout
+    class ReconnectModal
+
+    %% Shared/
+    class MiniSudokuExample
+
+    %% Pages/
     class Home {
         -bool RulesExpanded
     }
-    class Register {
-        -RegisterDto Form
-        -string[] Errors
-        -HandleSubmit() Task
-    }
-    class Login {
-        -LoginDto Form
-        -string[] Errors
-        -HandleSubmit() Task
-    }
-    class PuzzleList {
-        -int? FilterDifficulty
-        -int Page = 1
-        -PageResult~PuzzleListItem~? Data
+    class Highscore {
+        -List~HighscoreEntry~ Top
         -LoadAsync() Task
     }
-    class EnterPuzzle {
-        -PuzzleInputDto Draft
-        -SavePuzzleResult? LastSave
-        -HandleAddCage(CageInputDto) void
-        -HandleSave() Task
+    class Puzzles {
+        -byte? FilterDifficulty
+        -int Page
+        -PagedResult~PuzzleSummary~? Data
+        -LoadAsync() Task
     }
     class PlayPuzzle {
         +int PuzzleId
@@ -739,100 +698,46 @@ classDiagram
         -HandleCheckClick() Task
         -HandlePauseToggle() Task
     }
-    class Highscore {
-        -List~HighscoreEntry~ Top
-        -LoadAsync() Task
+    class EnterPuzzle {
+        -PuzzleInputDto Draft
+        -SavePuzzleResult? LastSave
+        -HandleAddCage(CageInputDto) void
+        -HandleSave() Task
+    }
+    class ErrorPage["Error"]
+    class NotFound
+
+    %% Pages/Auth/
+    class Login {
+        -HandleSubmit() Task
+    }
+    class Register {
+        -HandleSubmit() Task
     }
 
-    class PuzzleGrid {
-        +int[,] Values
-        +IReadOnlyList~CageDef~ Cages
-        +bool ReadOnly
-        +EventCallback~CellInputArgs~ OnCellInput
-    }
-    class CageEditor {
-        +EventCallback~CageInputDto~ OnCageAdded
-        -List~CellCoord~ Selected
-        -int? Sum
-    }
-    class Toolbar {
-        +bool PencilMode
-        +EventCallback OnTogglePencil
-    }
-    class HintButton {
-        +int HintsUsed
-        +EventCallback OnClick
-    }
-    class CheckSolutionButton {
-        +EventCallback OnClick
-    }
-    class PauseButton {
-        +bool IsPaused
-        +EventCallback OnToggle
-    }
-    class PencilMarkLayer {
-        +Dictionary~CellCoord, HashSet~int~~ Marks
-    }
-    class RulesPanel
-    class MiniSudokuExample
-    class FilterBar {
-        +int? Difficulty
-        +EventCallback~int?~ OnDifficultyChange
-    }
-    class PuzzleCard {
-        +PuzzleListItem Item
-        +EventCallback OnPlay
-    }
-    class HighscoreTable {
-        +IReadOnlyList~HighscoreEntry~ Rows
-    }
-    class RegisterForm {
-        +EventCallback~RegisterDto~ OnSubmit
-    }
-    class LoginForm {
-        +EventCallback~LoginDto~ OnSubmit
-    }
-
+    ComponentBase <|-- App
+    ComponentBase <|-- Routes
+    ComponentBase <|-- RedirectToLogin
     ComponentBase <|-- MainLayout
-    ComponentBase <|-- NavMenu
-    ComponentBase <|-- Home
-    ComponentBase <|-- Register
-    ComponentBase <|-- Login
-    ComponentBase <|-- PuzzleList
-    ComponentBase <|-- EnterPuzzle
-    ComponentBase <|-- PlayPuzzle
-    ComponentBase <|-- Highscore
-    ComponentBase <|-- PuzzleGrid
-    ComponentBase <|-- CageEditor
-    ComponentBase <|-- Toolbar
-    ComponentBase <|-- HintButton
-    ComponentBase <|-- CheckSolutionButton
-    ComponentBase <|-- PauseButton
-    ComponentBase <|-- PencilMarkLayer
-    ComponentBase <|-- RulesPanel
+    ComponentBase <|-- ReconnectModal
     ComponentBase <|-- MiniSudokuExample
-    ComponentBase <|-- FilterBar
-    ComponentBase <|-- PuzzleCard
-    ComponentBase <|-- HighscoreTable
-    ComponentBase <|-- RegisterForm
-    ComponentBase <|-- LoginForm
+    ComponentBase <|-- Home
+    ComponentBase <|-- Highscore
+    ComponentBase <|-- Puzzles
+    ComponentBase <|-- PlayPuzzle
+    ComponentBase <|-- EnterPuzzle
+    ComponentBase <|-- ErrorPage
+    ComponentBase <|-- NotFound
+    ComponentBase <|-- Login
+    ComponentBase <|-- Register
 
-    Home --> RulesPanel
+    App --> Routes
+    Routes --> MainLayout
+    MainLayout --> RedirectToLogin
     Home --> MiniSudokuExample
-    Register --> RegisterForm
-    Login --> LoginForm
-    PuzzleList --> FilterBar
-    PuzzleList --> PuzzleCard
-    EnterPuzzle --> PuzzleGrid
-    EnterPuzzle --> CageEditor
-    PlayPuzzle --> PuzzleGrid
-    PlayPuzzle --> Toolbar
-    PlayPuzzle --> HintButton
-    PlayPuzzle --> CheckSolutionButton
-    PlayPuzzle --> PauseButton
-    PlayPuzzle --> PencilMarkLayer
-    Highscore --> HighscoreTable
 ```
+
+> **Hinweis:** Die Pages enthalten ihre UI-Logik (Grid, Toolbar, Cage-Editor, Pause-Overlay, Pencil-Marks, etc.) inline; es gibt aktuell keine zusätzlichen Sub-Component-Razor-Dateien. Dies hält den Component-Tree flach — siehe arc42/05 §5.2.1 für Begründung.
 
 ---
 
@@ -842,28 +747,37 @@ classDiagram
 flowchart LR
     subgraph DIRoot["Program.cs / DI Container"]
         direction TB
-        AS["IAuthService → AuthService"]:::svc
         PS["IPuzzleService → PuzzleService"]:::svc
         GS["IGameService → GameService"]:::svc
         HS["IHintService → HintService"]:::svc
         HighS["IHighscoreService → HighscoreService"]:::svc
         Solver["ISolverService → SolverService (Singleton)"]:::dom
+        Score["IScoreCalculator → ScoreCalculator (Singleton)"]:::dom
+        Gen["IPuzzleGenerator → PuzzleGenerator (Singleton)"]:::dom
+        StructVal["PuzzleStructureValidator (Singleton)"]:::dom
         Validator["SolutionValidator (Singleton)"]:::dom
-        Hints["HintStrategies (Singleton)"]:::dom
+        Clock["TimeProvider.System (Singleton)"]:::dom
         Ctx["SudokuDbContext (Scoped)"]:::data
-        Hasher["IPasswordHasher → ASP.NET Identity"]:::sec
+        Seeder["PuzzleSeeder (Scoped)"]:::data
+        subgraph Identity["ASP.NET Identity"]
+            direction TB
+            UM["UserManager~AppUser~"]:::sec
+            SM["SignInManager~AppUser~"]:::sec
+            RM["RoleManager~IdentityRole~int~~"]:::sec
+        end
     end
 
     PS --> Solver
+    PS --> StructVal
     GS --> Validator
+    GS --> Score
     HS --> Solver
-    HS --> Hints
-    AS --> Hasher
-    AS --> Ctx
     PS --> Ctx
     GS --> Ctx
     HS --> Ctx
     HighS --> Ctx
+    Seeder --> Gen
+    Seeder --> Ctx
 
     classDef svc fill:#e6f3ff,stroke:#1976d2
     classDef dom fill:#fff4e6,stroke:#f57c00
@@ -875,7 +789,7 @@ flowchart LR
 
 | Kategorie | Lifetime | Begründung |
 |-----------|----------|------------|
-| Pure Domain (Solver, Validator, HintStrategies) | **Singleton** | Stateless, thread-safe |
+| Pure Domain (Solver, Validator, ScoreCalculator, Generator) | **Singleton** | Stateless, thread-safe |
 | Application Services | **Scoped** | Hängen am `DbContext` (Scoped) |
 | `SudokuDbContext` | **Scoped** | EF-Core-Standard, ein Context pro Request |
 | Blazor Components | **Transient** (per Render) | Framework-gemanaged |

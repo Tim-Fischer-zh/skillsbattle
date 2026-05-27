@@ -97,7 +97,7 @@ Die wichtigsten Qualitätsziele werden durch konkrete Patterns adressiert. Volls
 | Qualitätsziel | Pattern / Mechanismus | Bezug |
 |---------------|----------------------|------|
 | **Korrektheit** — Sudoku- und Killer-Regeln werden niemals verletzt | (a) DB-Constraints als letzte Verteidigung ([V05](../validation.md#v05--difficulty-uc04), [V06](../validation.md#v06--cage-struktur-uc04), [V08](../validation.md#v08--zell-eingabe-im-spiel-uc06)). (b) Server-seitige Re-Validierung in `IGameService.CheckSolutionAsync` (UC09). (c) Solver muss "solution must be unique" garantieren ([V07](../validation.md#v07--puzzle-solvability-uc05)). | README §1 Cage-Regeln |
-| **Performance** — Solver < 2 s, UI-Reaktion < 200 ms | (a) Sum-Check 405 als Fast-Fail vor Algorithmus (AC09.1). (b) Solver bricht bei der 2. Lösung ab (AC11.2). (c) Paginierte Puzzle-Listen (AC12.2). (d) `vw_Highscore` als pre-joined VIEW (siehe [`erm.md`](../erm.md)). | UC11 AC11.2 |
+| **Performance** — Solver < 2 s, UI-Reaktion < 200 ms | (a) Sum-Check 405 als Fast-Fail vor Algorithmus (AC09.1). (b) Solver bricht bei der 2. Lösung ab (AC11.2). (c) Paginierte Puzzle-Listen (AC12.2). (d) Highscore-Read derzeit als LINQ-Join im `HighscoreService` (View `vw_Highscore` existiert im Schema als Reserve, wird aktuell nicht gemappt — siehe [`erm.md`](../erm.md)). | UC11 AC11.2 |
 | **Testbarkeit** — 80 %+ Coverage, TDD-fähig | (a) Service-Interfaces (`I*Service`) erlauben Mock-Substitution. (b) Solver als pure Funktion testbar ohne DB. (c) bUnit für Component-Tests, EF InMemory für Integration. | [`test-protocol.md`](../test-protocol.md) |
 | **Sicherheit** — kein Klartext-Passwort, kein XSS, kein CSRF | (a) ASP.NET Identity PBKDF2 ([V03](../validation.md#v03--passwort-uc02-uc03)). (b) Razor `@`-Encoding ([V14](../validation.md#v14--xss--output-encoding-alle-screens)). (c) Antiforgery-Token in EditForm ([V15](../validation.md#v15--csrf-alle-post-endpoints)). (d) `[Authorize]` + UserId-Ownership ([V16](../validation.md#v16--authorization-alle-geschützten-seitenendpoints)). | UC02/UC10/UC13 |
 | **Wartbarkeit** — kleine, fokussierte Files | "Many small files > few large files" aus globalen Code-Standards: 200–400 Zeilen pro Komponente, Service oder Repo. Komponenten-Tree spiegelt Domain-Begriffe. | Coding-Style-Regel |
@@ -114,7 +114,7 @@ flowchart LR
     A[Spec lesen<br/>README §1-3] --> B[Use-Cases<br/>+ AC formulieren]
     B --> C[Validation-Regeln<br/>V01-V16]
     C --> D[Test-Cases<br/>planen]
-    D -->|11:30 Submission| E[(Test-Protokoll<br/>geliefert)]
+    D -->|12:00 Submission| E[(Test-Protokoll<br/>geliefert)]
     D --> F[Mockups<br/>+ ERM + SQL]
     F --> G[Architektur<br/>arc42 Kapitel 1-12]
     G --> H[Implementation<br/>TDD: Red-Green-Refactor]

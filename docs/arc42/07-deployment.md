@@ -119,7 +119,7 @@ dotnet build -c Release
 ### Run (Entwicklung)
 
 ```bash
-dotnet run --project src/Sudoku.Web
+dotnet run --project source/src/KillerSudoku.Web
 ```
 
 Die App ist anschliessend unter `https://localhost:5001` erreichbar.
@@ -164,13 +164,17 @@ AppDev_Fischer_Tim.zip
 │   ├── arc42.pdf                (Kapitel 01–12 als ein PDF)
 │   ├── mockups/                 (PNG-Exports aus Figma)
 │   └── test-protocol.pdf
-├── src/                         (vollständiger .NET-Source)
-│   ├── Sudoku.Web/              (Blazor Server App)
-│   ├── Sudoku.Domain/           (Solver, Domain-Modelle)
-│   ├── Sudoku.Data/             (EF Core, Repositories)
-│   ├── Sudoku.Tests.Unit/
-│   ├── Sudoku.Tests.Integration/
-│   └── Sudoku.Tests.E2E/
+├── source/                              (.NET 10 Solution)
+│   ├── KillerSudoku.slnx
+│   ├── src/
+│   │   ├── KillerSudoku.Web/            (Blazor Server App)
+│   │   ├── KillerSudoku.Core/           (Solver, Domain, Services, DTOs)
+│   │   └── KillerSudoku.Data/           (EF Core, Entities, DbContext, Service-Impl)
+│   └── tests/
+│       ├── KillerSudoku.UnitTests/      (xUnit)
+│       ├── KillerSudoku.IntegrationTests/ (xUnit + Testcontainers-MSSQL)
+│       ├── KillerSudoku.ComponentTests/ (bUnit)
+│       └── KillerSudoku.E2ETests/       (Playwright .NET)
 ├── bin/
 │   └── Release/net10.0/         (Build-Output, ausführbare Files)
 └── db/
@@ -182,13 +186,13 @@ AppDev_Fischer_Tim.zip
 Das README fordert "executable files". Für .NET 10 + Blazor Server bedeutet dies:
 
 ```bash
-dotnet publish -c Release -o bin/Release/net10.0
+dotnet publish source/src/KillerSudoku.Web -c Release -o bin/Release/net10.0
 ```
 
 Der Publish-Output enthält:
 
-- `Sudoku.Web.dll` (Haupt-Assembly)
-- `Sudoku.Web.exe` (Windows-Launcher, falls auf Windows publiziert)
+- `KillerSudoku.Web.dll` (Haupt-Assembly)
+- `KillerSudoku.Web.exe` (Windows-Launcher, falls auf Windows publiziert)
 - Alle Dependency-DLLs
 - `appsettings.json` (mit Connection-String-Slot)
 - `wwwroot/` (statische Assets, CSS, JS)
@@ -197,7 +201,7 @@ Starten der publizierten App:
 
 ```bash
 cd bin/Release/net10.0
-dotnet Sudoku.Web.dll
+dotnet KillerSudoku.Web.dll
 ```
 
 ### Datenbank-Script
@@ -230,7 +234,7 @@ README §2.6 weiter: "For the delivery, create a PDF document." Die arc42-Kapite
 
 ### Termin-Constraints
 
-README §1.4: "Note that the submission of the planned test cases must take place **by 11:30 o'clock**." Der Test-Plan ist in [`test-protocol.md`](../test-protocol.md) dokumentiert und wird vor 11:30:00 abgegeben (siehe Qualitätsziel Q3 in [Kapitel 1 §1.2](./01-introduction.md#12-qualitätsziele)).
+README §1.4: "Note that the submission of the planned test cases must take place **by 12 o'clock**." Der Test-Plan ist in [`test-protocol.md`](../test-protocol.md) dokumentiert und wird vor 12:00:00 abgegeben (siehe Qualitätsziel Q3 in [Kapitel 1 §1.2](./01-introduction.md#12-qualitätsziele)).
 
 ---
 

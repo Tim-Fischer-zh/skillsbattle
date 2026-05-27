@@ -17,13 +17,13 @@ flowchart TB
         direction TB
         Pages["Pages<br/>Home · Login · Register<br/>PuzzleList · EnterPuzzle<br/>PlayPuzzle · Highscore"]
         Layout["Shared Layout<br/>MainLayout · NavMenu"]
-        UIComp["Components<br/>PuzzleGrid · CageEditor<br/>HintButton · PauseButton<br/>CheckSolutionButton<br/>PencilMarkLayer<br/>Toolbar · FilterBar<br/>HighscoreTable<br/>RulesPanel · MiniSudokuExample<br/>RegisterForm · LoginForm"]
+        UIComp["Components<br/>App.razor · Routes.razor<br/>RedirectToLogin.razor<br/>Layout/MainLayout.razor<br/>Layout/ReconnectModal.razor<br/>Shared/MiniSudokuExample.razor"]
     end
 
     subgraph Core["KillerSudoku.Core (.NET Class Library)"]
         direction TB
-        Services["Application Services<br/>IPuzzleService · PuzzleService<br/>IGameService · GameService<br/>IHintService · HintService<br/>IHighscoreService · HighscoreService<br/>(Auth via ASP.NET Identity SignInManager/UserManager)"]
-        Domain["Domain Kern (isoliert)<br/>ISolverService · SolverService<br/>SolutionValidator<br/>HintStrategies (Naked Single, Cage-Forced)"]
+        Services["Application Services<br/>IPuzzleService · PuzzleService<br/>IGameService · GameService<br/>IHintService · HintService<br/>IHighscoreService · HighscoreService<br/>IScoreCalculator · ScoreCalculator<br/>(Auth via ASP.NET Identity SignInManager/UserManager)"]
+        Domain["Domain Kern (isoliert)<br/>ISolverService · SolverService<br/>SolutionValidator<br/>PuzzleStructureValidator<br/>PuzzleGenerator (IPuzzleGenerator)"]
         Dtos["DTOs / Records<br/>RegisterDto · LoginDto<br/>PuzzleInputDto · CageInputDto<br/>CageDef · SolveResult<br/>CheckResult · HintResult<br/>PuzzleListItem · HighscoreEntry<br/>RegisterResult · LoginResult<br/>SavePuzzleResult · PageResult&lt;T&gt;"]
     end
 
@@ -68,8 +68,10 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 | **Eingehende Schnittstelle** | HTTP-Requests vom Browser (Routes aus [Funktionalitäts-Matrix](../functionality.md) §Screen-Inventar S1–S8); SignalR-Verbindung für interaktive Updates. |
 | **Ausgehende Schnittstelle** | Application-Services via DI: `IPuzzleService`, `IGameService`, `IHintService`, `IHighscoreService`. Auth direkt über ASP.NET-Identity-`SignInManager<AppUser>` und `UserManager<AppUser>` (kein eigener Wrapper-Service). |
 | **Pages (`@page`)** | `Home.razor` (S1, `/`) · `Auth/Register.razor` (S2, `/register`) · `Auth/Login.razor` (S3, `/login`) · `Puzzles.razor` (S4, `/puzzles`) · `EnterPuzzle.razor` (S5, `/puzzles/new`) · `PlayPuzzle.razor` (S6, `/puzzles/{id}/play`) · `Highscore.razor` (S7, `/highscore`). |
-| **Shared Components** | `MainLayout.razor` · `NavMenu.razor` · `RulesPanel.razor` · `MiniSudokuExample.razor` · `RegisterForm.razor` · `LoginForm.razor` · `PuzzleGrid.razor` · `CageEditor.razor` · `HintButton.razor` · `CheckSolutionButton.razor` · `PauseButton.razor` · `PencilMarkLayer.razor` · `Toolbar.razor` · `FilterBar.razor` · `PuzzleCard.razor` · `HighscoreTable.razor`. |
+| **Shared Components** | `App.razor` · `Routes.razor` · `RedirectToLogin.razor` · `MainLayout.razor` · `ReconnectModal.razor` · `MiniSudokuExample.razor` · `Error.razor` · `NotFound.razor`. |
 | **Querschnitt** | `[Authorize]` auf allen Pages außer S1/S2/S3 ([V16](../validation.md#v16--authorization-alle-geschützten-seitenendpoints)); `EditForm` mit Antiforgery ([V15](../validation.md#v15--csrf-alle-post-endpoints)); Razor-`@`-Encoding ([V14](../validation.md#v14--xss--output-encoding-alle-screens)). |
+
+**Inline-UI:** Die im class-diagram.md skizzierten Sub-Komponenten (`PuzzleGrid`, `Toolbar`, `CageEditor`, `HintButton`, `PauseButton`, `CheckSolutionButton`, `PencilMarkLayer`, `FilterBar`, `PuzzleCard`, `HighscoreTable`, `RegisterForm`, `LoginForm`, `RulesPanel`, `NavMenu`) sind aktuell **nicht als eigene .razor-Dateien implementiert** — ihre Markup-/Event-Handler-Logik lebt inline in den Pages (`PlayPuzzle.razor`, `EnterPuzzle.razor`, `Puzzles.razor`, `Highscore.razor`, `Home.razor`, `Auth/Login.razor`, `Auth/Register.razor`). Dies hält den Component-Tree flach. Eine spätere Extraktion ist möglich, ohne API-Brüche.
 | **Test-Strategie** | bUnit-Component-Tests (Rendering, Event-Handler), E2E ohne Framework gemäß README §3.2. |
 
 ### 5.2.2 KillerSudoku.Core — Application Services
@@ -79,9 +81,11 @@ Für jeden Baustein: Zweck · Schnittstellen (eingehend/ausgehend) · enthaltene
 | **Zweck** | Use-Case-Orchestrierung; konvertiert UI-Eingaben in DB-Operationen + Domain-Aufrufe; setzt Transaktions- und Autorisierungs-Grenzen. |
 | **Eingehende Schnittstelle** | Service-Interfaces `IPuzzleService`, `IGameService`, `IHintService`, `IHighscoreService` — komplette Signaturen [siehe Funktionalitäts-Matrix](../functionality.md). Auth-Flows (UC02/UC03) verwenden direkt ASP.NET-Identity (`SignInManager<AppUser>`, `UserManager<AppUser>`) ohne eigene Wrapper-Service-Schicht. |
 | **Ausgehende Schnittstelle** | `ISolverService` (Domain) + `SudokuDbContext` (Data). |
-| **Enthaltene Services** | `PuzzleService` (UC04/UC05/UC12) · `GameService` (UC06/UC09/UC10/UC13/UC14) · `HintService` (UC07) · `HighscoreService` (UC08). UC02/UC03 (Register/Login) werden direkt über ASP.NET-Identity-Services (`SignInManager`, `UserManager`) in den Razor-Pages umgesetzt. |
+| **Enthaltene Services** | `PuzzleService` (UC04/UC05/UC12) · `GameService` (UC06/UC09/UC10/UC13/UC14) · `HintService` (UC07) · `HighscoreService` (UC08) · **`ScoreCalculator`** (Singleton, pure Funktion — wird von `GameService.CompleteGameAsync` aufgerufen). UC02/UC03 (Register/Login) werden direkt über ASP.NET-Identity-Services (`SignInManager`, `UserManager`) in den Razor-Pages umgesetzt. |
 | **UC-Mapping** | Vollständig in [Funktionalitäts-Matrix](../functionality.md) §Matrix-Tabelle. |
 | **Test-Strategie** | Unit-Tests pro Service mit gemocktem `ISolverService` + `SudokuDbContext` (EF InMemory); Integration-Tests gegen echte MS-SQL-Test-DB. |
+
+**HighscoreService — View-Status:** Der Service liest aktuell mit LINQ-Joins über `Games ⋈ AppUser ⋈ Puzzle`. Die View `vw_Highscore` existiert zwar im SQL-Schema (`db/sudoku.sql`), wird aber vom `SudokuDbContext` **nicht** als Keyless-Entity gemappt. Switch ist offen — Schema-Reserve.
 
 ### 5.2.3 KillerSudoku.Core — Domain-Kern (Solver/Validator)
 
