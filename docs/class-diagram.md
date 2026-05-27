@@ -78,24 +78,18 @@ classDiagram
     }
 
     %% ============ APPLICATION SERVICES ============
-    class IAuthService {
-        <<interface>>
-        +RegisterAsync(RegisterDto) Task~RegisterResult~
-        +LoginAsync(LoginDto) Task~LoginResult~
-        +LogoutAsync(int userId) Task
-    }
     class IPuzzleService {
         <<interface>>
         +ValidateStructureAsync(PuzzleInputDto) Task~ValidationResult~
         +SaveIfSolvableAsync(PuzzleInputDto, int userId) Task~SavePuzzleResult~
-        +ListAsync(int? difficulty, int page, int pageSize) Task~PageResult~PuzzleListItem~~
-        +GetByIdAsync(int puzzleId) Task~PuzzleDto~
+        +ListAsync(byte? difficulty, int page, int pageSize, int? currentUserId) Task~PagedResult~PuzzleSummary~~
+        +GetByIdAsync(int puzzleId) Task~PuzzleInputDto?~
     }
     class IGameService {
         <<interface>>
         +StartGameAsync(int userId, int puzzleId) Task~int~
-        +SetCellValueAsync(int gameId, int row, int col, int? v) Task
-        +TogglePencilMarkAsync(int gameId, int row, int col, int mark) Task
+        +SetCellValueAsync(int gameId, byte row, byte col, byte? v) Task
+        +TogglePencilMarkAsync(int gameId, byte row, byte col, byte mark) Task
         +PauseAsync(int gameId) Task
         +ResumeAsync(int gameId) Task
         +CheckSolutionAsync(int gameId) Task~CheckResult~
@@ -107,54 +101,67 @@ classDiagram
     }
     class IHighscoreService {
         <<interface>>
-        +GetTopAsync(int limit) Task~IReadOnlyList~HighscoreEntry~~
+        +GetTopAsync(int limit, byte? difficulty) Task~IReadOnlyList~HighscoreEntry~~
     }
-    class AuthService
+    class IPuzzleGenerator {
+        <<interface>>
+        +Generate(byte difficulty, Random? rng) PuzzleInputDto
+    }
+    class IScoreCalculator {
+        <<interface>>
+        +Calculate(int timeSeconds, int hintsUsed) int
+    }
     class PuzzleService
     class GameService
     class HintService
     class HighscoreService
+    class PuzzleGenerator
+    class ScoreCalculator
+    class AspNetIdentity {
+        <<framework>>
+        UserManager~AppUser~
+        SignInManager~AppUser~
+    }
 
     %% ============ DOMAIN ============
     class ISolverService {
         <<interface>>
-        +Solve(int[,] given, IReadOnlyList~CageDef~ cages) SolveResult
-        +CountSolutions(int[,] given, IReadOnlyList~CageDef~ cages) int
+        +Solve(byte[,] givens, IReadOnlyList~CageInputDto~ cages) SolveResult
+        +CountSolutions(byte[,] givens, IReadOnlyList~CageInputDto~ cages, int limit) int
     }
     class SolverService {
-        -int MaxSolutions = 2
-        -Backtrack(Board, int idx) bool
+        -Backtrack(SolverContext ctx, int limit) bool
     }
     class SolutionValidator {
-        +CheckRowsColsNonets(int[,] grid) Violation?
-        +CheckCages(int[,] grid, IReadOnlyList~CageDef~ cages) Violation?
-        +CheckSumIs405(int[,] grid) bool
+        +Validate(byte[,] grid, IReadOnlyList~CageInputDto~ cages) CheckResult
     }
-    class HintStrategies {
-        +NakedSingle(Board) HintResult?
-        +CageForced(Board, IReadOnlyList~CageDef~) HintResult?
-        +FallbackFromSolver(int[,] solution, Board) HintResult
+    class PuzzleStructureValidator {
+        +Validate(PuzzleInputDto input) ValidationResult
     }
+    class PuzzleGenerator {
+        +Generate(byte difficulty, Random? rng) PuzzleInputDto
+    }
+    class ScoreCalculator {
+        +Calculate(int timeSeconds, int hintsUsed) int
+    }
+    note for SolverService "Inline-Hint-Strategien in HintService\n(Naked Single, Cage-Forced, Solver-Fallback);\nkeine eigene HintStrategies-Klasse."
 
     %% ============ DTOs ============
-    class RegisterDto
-    class LoginDto
     class PuzzleInputDto
     class CageInputDto
-    class PuzzleDto
-    class PuzzleListItem
+    class PuzzleSummary
     class CheckResult
     class HintResult
     class SolveResult
     class HighscoreEntry
-    class RegisterResult
-    class LoginResult
     class SavePuzzleResult
     class ValidationResult
+    class PagedResult~T~
+    note for SavePuzzleResult "Register/Login verwenden\nIdentityResult/SignInResult\naus ASP.NET Identity\n(keine eigenen DTOs)"
 
     %% ============ PERSISTENCE ============
     class SudokuDbContext {
-        +DbSet~AppUser~ AppUsers
+        <<IdentityDbContext>>
         +DbSet~Puzzle~ Puzzles
         +DbSet~Cage~ Cages
         +DbSet~CageCell~ CageCells
@@ -162,10 +169,11 @@ classDiagram
         +DbSet~GameCell~ GameCells
         +DbSet~PencilMark~ PencilMarks
         +DbSet~HintLog~ HintLogs
-        +DbSet~HighscoreEntry~ HighscoreView
         +OnModelCreating(ModelBuilder) void
     }
-    class AppUser
+    class AppUser {
+        <<IdentityUser~int~>>
+    }
     class Puzzle
     class Cage
     class CageCell
@@ -175,40 +183,34 @@ classDiagram
     class HintLog
 
     %% ============ DEPENDENCIES ============
-    PlayPuzzle --> PuzzleGrid
-    PlayPuzzle --> HintButton
-    PlayPuzzle --> CheckSolutionButton
-    PlayPuzzle --> PauseButton
-    PlayPuzzle --> PencilMarkLayer
     PlayPuzzle ..> IGameService
     PlayPuzzle ..> IHintService
-    EnterPuzzle --> PuzzleGrid
-    EnterPuzzle --> CageEditor
+    PlayPuzzle ..> SudokuDbContext
     EnterPuzzle ..> IPuzzleService
+    EnterPuzzle ..> IPuzzleGenerator
     PuzzleList ..> IPuzzleService
-    Highscore --> HighscoreTable
     Highscore ..> IHighscoreService
-    Login ..> IAuthService
-    Register ..> IAuthService
+    Login ..> AspNetIdentity
+    Register ..> AspNetIdentity
 
-    IAuthService <|.. AuthService
     IPuzzleService <|.. PuzzleService
     IGameService <|.. GameService
     IHintService <|.. HintService
     IHighscoreService <|.. HighscoreService
     ISolverService <|.. SolverService
+    IPuzzleGenerator <|.. PuzzleGenerator
+    IScoreCalculator <|.. ScoreCalculator
 
-    AuthService ..> SudokuDbContext
     PuzzleService ..> SudokuDbContext
     PuzzleService ..> ISolverService
+    PuzzleService ..> PuzzleStructureValidator
     GameService ..> SudokuDbContext
     GameService ..> SolutionValidator
+    GameService ..> IScoreCalculator
     HintService ..> SudokuDbContext
     HintService ..> ISolverService
-    HintService ..> HintStrategies
     HighscoreService ..> SudokuDbContext
-
-    SolverService ..> SolutionValidator
+    PuzzleGenerator ..> ISolverService
 
     SudokuDbContext --> AppUser
     SudokuDbContext --> Puzzle
@@ -219,6 +221,8 @@ classDiagram
     SudokuDbContext --> PencilMark
     SudokuDbContext --> HintLog
 ```
+
+> **Auth-Hinweis:** Es gibt **keinen** eigenen `IAuthService`. UC02 (Register) und UC03 (Login) werden direkt in den Razor-Pages über `UserManager<AppUser>` / `SignInManager<AppUser>` von ASP.NET Core Identity umgesetzt. Logout ist als `POST /logout`-Endpoint in `Program.cs` registriert.
 
 ---
 
@@ -232,113 +236,111 @@ classDiagram
 
     class ISolverService {
         <<interface>>
-        +Solve(int[,] given, IReadOnlyList~CageDef~ cages) SolveResult
-        +CountSolutions(int[,] given, IReadOnlyList~CageDef~ cages) int
+        +Solve(byte[,] givens, IReadOnlyList~CageInputDto~ cages) SolveResult
+        +CountSolutions(byte[,] givens, IReadOnlyList~CageInputDto~ cages, int limit) int
     }
 
     class SolverService {
-        -const int MaxSolutions = 2
-        -int _found
-        -int[,] _firstSolution
-        +Solve(int[,] given, IReadOnlyList~CageDef~ cages) SolveResult
-        +CountSolutions(int[,] given, IReadOnlyList~CageDef~ cages) int
-        -Backtrack(Board b, int cellIdx) bool
-        -IsLegal(Board b, int row, int col, int value) bool
-        -CheckCageConstraints(Board b, int row, int col, int value) bool
+        <<sealed>>
+        +Solve(byte[,] givens, IReadOnlyList~CageInputDto~ cages) SolveResult
+        +CountSolutions(byte[,] givens, IReadOnlyList~CageInputDto~ cages, int limit=2) int
+        -Backtrack(SolverContext ctx, int limit) bool
+    }
+
+    class SolverContext {
+        <<nested,private>>
+        +byte[,] Grid
+        +int[] RowMask
+        +int[] ColMask
+        +int[] NonetMask
+        +int[] CageId
+        +int[] CageUsedMask
+        +int[] CageRemainingSum
     }
 
     class SolutionValidator {
-        +CheckSumIs405(int[,] grid) bool
-        +CheckRowsColsNonets(int[,] grid) Violation?
-        +CheckCages(int[,] grid, IReadOnlyList~CageDef~ cages) Violation?
-        +CheckAll(int[,] grid, IReadOnlyList~CageDef~ cages) CheckResult
+        +Validate(byte[,] grid, IReadOnlyList~CageInputDto~ cages) CheckResult
     }
 
-    class HintStrategies {
-        +NakedSingle(Board b) HintResult?
-        +CageForced(Board b, IReadOnlyList~CageDef~ cages) HintResult?
-        +FallbackFromSolver(int[,] solution, Board current) HintResult
+    class PuzzleStructureValidator {
+        +Validate(PuzzleInputDto input) ValidationResult
     }
 
-    class Board {
+    class PuzzleGenerator {
+        <<sealed>>
+        +Generate(byte difficulty, Random? rng) PuzzleInputDto
+    }
+
+    class CageInputDto {
         <<record>>
-        +int[,] Cells
-        +IReadOnlyList~CageDef~ Cages
-        +Clone() Board
-        +Set(int row, int col, int? v) Board
+        +byte Sum
+        +IReadOnlyList~CellCoord~ Cells
     }
 
-    class CageDef {
+    class CellCoord {
         <<record>>
-        +int Id
-        +int Sum
-        +IReadOnlyList~Cell~ Cells
+        +byte Row
+        +byte Col
     }
 
-    class Cell {
-        <<record>>
-        +int Row
-        +int Col
-    }
-
-    class Violation {
-        <<record>>
-        +ViolationKind Kind
-        +int Row
-        +int Col
-        +string Message
-    }
-
-    class ViolationKind {
+    class CheckFailReason {
         <<enumeration>>
-        Sum405Mismatch
+        SumMismatch
         RowDuplicate
         ColumnDuplicate
         NonetDuplicate
         CageSumMismatch
         CageDuplicate
+        Incomplete
     }
 
     class SolveResult {
         <<record>>
         +int Solutions
-        +int[,]? Solution
+        +byte[,]? Solution
     }
 
     class HintResult {
         <<record>>
-        +int RowIdx
-        +int ColIdx
-        +int Value
-        +string Strategy
+        +byte RowIdx
+        +byte ColIdx
+        +byte Value
+        +HintStrategy Strategy
+    }
+
+    class HintStrategy {
+        <<enumeration>>
+        NakedSingle
+        CageForced
+        SolverFallback
     }
 
     class CheckResult {
         <<record>>
         +bool IsCorrect
-        +Violation? FirstViolation
+        +CheckFailReason? FailReason
     }
 
     ISolverService <|.. SolverService
-    SolverService ..> Board
-    SolverService ..> CageDef
-    SolverService ..> SolutionValidator : reuses-rules
+    SolverService *-- SolverContext
+    SolverService ..> CageInputDto
     SolverService ..> SolveResult
-    SolutionValidator ..> Violation
+    SolutionValidator ..> CageInputDto
     SolutionValidator ..> CheckResult
-    HintStrategies ..> Board
-    HintStrategies ..> CageDef
-    HintStrategies ..> HintResult
-    Board ..> CageDef
-    CageDef ..> Cell
-    Violation ..> ViolationKind
+    SolutionValidator ..> CheckFailReason
+    PuzzleStructureValidator ..> PuzzleInputDto
+    PuzzleGenerator ..> ISolverService
+    HintResult ..> HintStrategy
+    CageInputDto ..> CellCoord
 ```
 
 **Bemerkungen:**
 
-- `SolverService.Backtrack` ist klassisches Backtracking + Constraint-Propagation. Performance-Ziel AC11.2 (< 2 s).
-- `CountSolutions` bricht bei der **2. gefundenen Lösung** ab (Spec UC5: "solution must be unique").
-- `SolutionValidator.CheckSumIs405()` ist der billige Fast-Fail-Check (Spec §2.3) — verwendet die ableitete Konstante `9 × 45 = 405`.
+- `SolverService.Backtrack` ist Backtracking + MRV-Heuristik + Bit-Masken-Repräsentation für Row/Col/Nonet/Cage-Constraints (siehe `Core/Services/SolverService.cs`).
+- `CountSolutions(..., limit)` bricht beim Erreichen des Limits ab — Default `limit=2` (Spec UC5: "solution must be unique") → Solutions ∈ {0, 1, 2}.
+- **Sum-Check 9 × 45 = 405** ist als Pre-Check inline implementiert (`Core/Services/SolutionValidator.cs` und `Core/Services/SolverService.cs:SolverContext.Create`); keine eigene Methode `CheckSumIs405()`.
+- `SolutionValidator.Validate` setzt die vier Killer-Sudoku-Regeln in einer fest definierten Reihenfolge um: Vollständigkeit → Sum=405 → Row/Col/Nonet → Cage-Sum/Cage-Duplikat (FailReason codiert via `CheckFailReason`-Enum).
+- **Hint-Strategien (Naked Single / Cage-Forced / Solver-Fallback)** sind nicht als eigene Klasse `HintStrategies` modelliert, sondern als private Methoden in `HintService` (`Data/Services/HintService.cs`).
 
 ---
 

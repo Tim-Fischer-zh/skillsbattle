@@ -91,41 +91,68 @@ erDiagram
 
 > **Anmerkung Kardinalitäten:** `Puzzle ||--|{ Cage` (1..*): ein valide gespeichertes Puzzle hat mindestens einen Cage (insgesamt 81 Zellen müssen abgedeckt sein). DB-seitig garantiert dies aktuell nicht ein expliziter Constraint, sondern die Application-Validation in `PuzzleStructureValidator` (siehe [`validation.md`](validation.md#v06--cage-struktur-uc04) V06).
 
+## Identity-Hilfstabellen (ASP.NET Core Identity)
+
+Folgende Tabellen werden zusätzlich zu den Killer-Sudoku-Domain-Tabellen vom Identity-Subsystem benötigt und sind in `db/sudoku.sql` enthalten. Sie tauchen im ERD oben nicht auf, weil sie infrastrukturell (Cookie-Auth, Claims, Token-Storage) und nicht domain-spezifisch sind:
+
+| Tabelle | Zweck | Wichtige Spalten |
+|---------|-------|------------------|
+| `AspNetRoles` | Rollen-Definitionen | `Id` (int PK), `Name`, `NormalizedName` (UQ) |
+| `AspNetUserClaims` | Pro-User-Claims | `Id`, `UserId` → `AppUser` |
+| `AspNetUserLogins` | Externe Login-Provider | `LoginProvider`, `ProviderKey`, `UserId` |
+| `AspNetUserTokens` | Token-Storage (z. B. 2FA) | `UserId`, `LoginProvider`, `Name` |
+| `AspNetUserRoles` | Junction User ↔ Role | `UserId`, `RoleId` |
+| `AspNetRoleClaims` | Pro-Rolle-Claims | `Id`, `RoleId` |
+
+Diese Tabellen werden vom Code nicht direkt referenziert; sie werden ausschließlich vom Identity-Framework gepflegt. In der aktuellen App ist nur das User-Management aktiv — die Rollen-, Claims-, Login- und Token-Mechanismen sind vorhanden, werden aber nicht genutzt.
+
+Zusätzlich existiert `__EFMigrationsHistory` als EF-Standard-Tabelle, aktuell ungenutzt (siehe ORM-Hinweis oben).
+
 ## Design-Entscheidungen
 
 | Punkt | Entscheidung | Begründung |
 |-------|-------------|------------|
-| User-Tabelle | `AppUser` statt `User` | `User` ist reserviertes T-SQL-Keyword |
+| User-Tabelle | `AppUser` (erbt von `IdentityUser<int>`) | `User` ist reserviertes T-SQL-Keyword; Identity-Basis liefert Passwort-Hash, Lockout, Stamps, 2FA-Felder |
 | Spaltennamen `Row`/`Col` | `RowIdx` / `ColIdx` | `ROW`/`COL` sind T-SQL-Reserved |
-| Cage-Modell | Relational (Cage + CageCell) | FK-Integrity, easy joins, prüfer-testbar via SQL |
+| Cage-Modell | Relational (Cage + CageCell) | FK-Integrity, einfache Joins, prüfer-testbar via SQL |
 | Solution-Speicherung | **NICHT** in DB | UC04 README: "No solution is recorded" |
-| Highscore | als **VIEW** `vw_Highscore` | Single source of truth via JOIN, kein Sync-Problem |
-| "Eine Zelle pro Cage in einem Puzzle" | Application-Layer + Trigger ODER UNIQUE-Index | siehe `sudoku.sql` Constraint-Diskussion |
-| Game-Pause | `IsPaused` + `PausedAt` + `TotalPausedSeconds` | erlaubt sauberen Timer-Resume, `TimeSeconds = TotalPausedSeconds + (EndTime - StartTime)` |
+| Highscore | DB-Read über LINQ-Joins (`Game ⋈ AppUser ⋈ Puzzle`) im `HighscoreService`; **View `vw_Highscore` existiert im Schema** ([`db/sudoku.sql`](../db/sudoku.sql)) als Reserve, wird vom aktuellen Service jedoch **nicht** gemappt | Service-Code referenziert `_db.Games` direkt; View-Switch bleibt offen, ohne dass das Schema angepasst werden muss |
+| "Eine Zelle pro Cage in einem Puzzle" | Application-Validation (`PuzzleStructureValidator`) + DB-Trigger `trg_CageCell_UniquePerPuzzle` (AFTER INSERT/UPDATE) | Defense-in-Depth; Trigger lebt nur im SQL-Skript, nicht im EF-Modell |
+| Game-Pause | `IsPaused` + `PausedAt` + `TotalPausedSeconds` | erlaubt sauberen Timer-Resume; `TimeSeconds = DATEDIFF(SECOND, StartTime, EndTime) − TotalPausedSeconds` |
 | GameCell.CellValue | NULL erlaubt | leere Zelle vs eingetragener Wert |
-| PencilMark Modell | eigene Tabelle mit Composite PK | (GameId, Row, Col, Value) — bis zu 9 Marks pro Zelle |
+| Game.Score / Game.TimeSeconds / Game.EndTime / Game.PausedAt | NULL erlaubt | Bei laufendem/pausiertem Spiel noch nicht gesetzt; Default-Zustand → `Score IS NULL` und `EndTime IS NULL` |
+| PencilMark Modell | eigene Tabelle mit Composite PK | `(GameId, RowIdx, ColIdx, MarkValue)` — bis zu 9 Marks pro Zelle, garantiert ohne Duplikate |
 
 ## Constraints (zusammengefasst)
 
-- `AppUser.Username` UNIQUE, NOT NULL
-- `AppUser.Email` UNIQUE, NOT NULL
-- `Puzzle.Difficulty` CHECK ∈ {1, 2, 3}
-- `Cage.Sum` CHECK BETWEEN 1 AND 45
-- `CageCell.RowIdx` / `ColIdx` CHECK BETWEEN 0 AND 8
-- `GameCell.CellValue` CHECK BETWEEN 1 AND 9 (oder NULL)
-- `PencilMark.MarkValue` CHECK BETWEEN 1 AND 9
-- `Game.TimeSeconds` CHECK ≥ 0
-- `Game.HintsUsed` CHECK ≥ 0
-- `Game.Score` CHECK ≥ 0
-- "Eine Zelle pro Cage pro Puzzle" → Trigger + Application-Validierung (siehe SQL)
+| Constraint | Layer | Beschreibung |
+|------------|-------|--------------|
+| `AppUser.UserName` UNIQUE (filtered, WHERE NOT NULL) | DB | Identity-Standard; Pflicht-Length 3–50 und Pattern werden in der App ([V01](validation.md#v01--username-uc02)) durchgesetzt — kein CHECK-Constraint im SQL |
+| `AppUser.Email` UNIQUE (filtered, WHERE NOT NULL) | DB | Identity-Standard; Format-Validation läuft in der App ([V02](validation.md#v02--email-uc02)) — kein CHECK-Constraint im SQL |
+| `AppUser.PasswordHash` | App | Pflicht-Hash via ASP.NET Identity (PBKDF2); Spalte selbst ist Identity-nullable |
+| `Puzzle.Difficulty` CHECK ∈ {1, 2, 3} | DB | `CK_Puzzle_Difficulty` |
+| `Cage.Sum` CHECK BETWEEN 1 AND 45 | DB | `CK_Cage_Sum_Range` |
+| `CageCell.RowIdx` / `ColIdx` CHECK BETWEEN 0 AND 8 | DB | `CK_CageCell_RowRange` / `CK_CageCell_ColRange` |
+| `GameCell.CellValue` CHECK NULL OR BETWEEN 1 AND 9 | DB | `CK_GameCell_Value` |
+| `PencilMark.MarkValue` CHECK BETWEEN 1 AND 9 | DB | `CK_PencilMark_Value` |
+| `Game.TimeSeconds` CHECK NULL OR ≥ 0 | DB | `CK_Game_TimeSeconds` |
+| `Game.HintsUsed` CHECK ≥ 0 | DB | `CK_Game_HintsUsed` |
+| `Game.Score` CHECK NULL OR ≥ 0 | DB | `CK_Game_Score` |
+| `Game.TotalPausedSeconds` CHECK ≥ 0 | DB | `CK_Game_TotalPaused` |
+| Filtered Unique Index `UX_Game_ActiveOnly` | DB | `(UserId, PuzzleId)` WHERE `IsCompleted = 0` — max. 1 aktives Game pro User/Puzzle |
+| Trigger `trg_CageCell_UniquePerPuzzle` | DB (nur SQL-Skript, kein EF) | "Eine Zelle pro Puzzle in genau einem Cage" — siehe Anmerkung unten |
+| Cage-Coverage (81 Zellen, jede Zelle ein Cage) | App | Wird in `PuzzleStructureValidator` (Core) geprüft; keine DB-Constraint |
+
+> **Hinweis Trigger:** `trg_CageCell_UniquePerPuzzle` ist Teil von `db/sudoku.sql` und wirkt zur Laufzeit. Er ist nicht im `SudokuDbContext` modelliert; beim Anlegen des Schemas via EF-Migration müsste er separat hinzugefügt werden — aktuell wird das Schema ausschließlich über das SQL-Skript bereitgestellt.
 
 ## Ableitungen für Tests
 
-- **UC04 → AC04.4:** Test "Puzzle-Tabelle hat KEINE Solution-Spalte" = SQL-Query auf `INFORMATION_SCHEMA.COLUMNS`
-- **UC04 → AC04.1:** Test "INSERT mit Difficulty=4 wird abgelehnt" = SQL-Constraint-Test
-- **UC04 → AC04.3:** Test "INSERT Cage mit Sum=46 wird abgelehnt" = SQL-Constraint-Test
-- **UC05 → AC05.1:** Integration-Test: Save versuche mit unlösbarem Puzzle → kein Row in `Puzzle`
-- **UC13 → AC13.3:** UNIQUE-Index `UX_Game_ActiveOnly (UserId, PuzzleId)` WHERE `IsCompleted = 0` (Filtered Index) — verhindert mehrere offene Games pro User-Puzzle-Kombi (egal ob pausiert oder laufend).
+- **UC04 → AC04.4:** Test "Puzzle-Tabelle hat KEINE Solution-Spalte" = SQL-Query auf `INFORMATION_SCHEMA.COLUMNS` (siehe `DbConstraintTests.T037`).
+- **UC04 → AC04.1:** Test "INSERT mit Difficulty=4 wird abgelehnt" = SQL-Constraint-Test (`DbConstraintTests.Puzzle_Difficulty_OutOfRange_IsRejected`).
+- **UC04 → AC04.3:** Test "INSERT Cage mit Sum=46 wird abgelehnt" = SQL-Constraint-Test.
+- **UC04 → AC04.2:** Test "Eine Zelle in zwei Cages wird abgelehnt" verifiziert den Trigger (`DbConstraintTests.T040`).
+- **UC05 → AC05.1:** Integration-Test: Save versuche mit unlösbarem Puzzle → kein Row in `Puzzle` (`PuzzleServiceTests.T042`).
+- **UC13 → AC13.3:** UNIQUE-Index `UX_Game_ActiveOnly (UserId, PuzzleId)` WHERE `IsCompleted = 0` (Filtered Index) — verhindert mehrere offene Games pro User-Puzzle-Kombi; geprüft durch `DbConstraintTests.T109`.
 
 ## Sample-Queries (für Solver / Hint / Validation)
 
